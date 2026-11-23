@@ -52,14 +52,14 @@ jobs:
           key: origin-android-armv7-${{ runner.os }}-${{ hashFiles('tools/android/build-deps.sh', 'tools/build-engine.sh', 'tools/engine/engine.patch') }}
 
       - name: Build native dependencies (SDL2, Mbed TLS, curl)
-        run: tools/android/build-deps.sh
+        run: bash tools/android/build-deps.sh
 
       - name: Build P2P engine (armeabi-v7a)
         # build-engine.sh writes to build/android/<abi>/ by default, but tools/targets/android.sh looks in $AB/engine/<abi>/
-        run: ENGINE_OUT="$AB/engine/armeabi-v7a/libsbengine.so" tools/build-engine.sh android-armeabi-v7a
+        run: ENGINE_OUT="$AB/engine/armeabi-v7a/libsbengine.so" bash tools/build-engine.sh android-armeabi-v7a
 
       - name: Build release APK
-        run: tools/android/build-apk.sh
+        run: bash tools/android/build-apk.sh
 
       - name: Locate APK
         run: |
