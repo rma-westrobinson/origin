@@ -76,6 +76,7 @@ static jclass act;
 static jmethodID mVAv, mVGo, mVPl;
 static jmethodID mPipA, mPipQ;
 static jmethodID mOri, mImm, mHap, mSafe, mOpen, mBrG, mBrS, mVoG, mVoS, mGest;
+static int call_ret_int(jmethodID m, int arg, int hasArg, int fail); /* forward: defined below, used by plat_pip_active */
 static SDL_atomic_t touchCancelEv; /* the event type, registered once on the app thread (0 not yet, -1 none to be had);
                                       SDL_PushEvent is thread-safe */
 static int act_ready(JNIEnv *e) {
