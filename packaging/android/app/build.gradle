@@ -1,4 +1,4 @@
-// Origin for Android. The native libraries (libmain.so, libSDL2.so, libcurl.so, libsbengine.so), SDL's Java
+// The app for Android. The native libraries (libmain.so, libSDL2.so, libcurl.so, libsbengine.so), SDL's Java
 // sources and the app's assets are put in place by tools/android/build-apk.sh; this file only packages them.
 plugins { id 'com.android.application' }
 
@@ -53,6 +53,7 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer:$m3"
     implementation "androidx.media3:media3-exoplayer-hls:$m3"
     implementation "androidx.media3:media3-exoplayer-dash:$m3"
+    implementation "androidx.media3:media3-exoplayer-rtsp:$m3"   // security cameras: rtsp:// (SbPlayer.load)
     implementation "androidx.media3:media3-ui:$m3"
     implementation 'androidx.annotation:annotation:1.9.1'
     implementation 'androidx.annotation:annotation-experimental:1.4.1'

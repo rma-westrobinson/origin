@@ -77,6 +77,7 @@ public class MainActivity extends SDLActivity {
         ViewGroup parent = (ViewGroup) mLayout.getParent(); if (parent != null) parent.removeView(mLayout);
         box = new Box(this);
         SbPlayer.attach(this, box);            // the video frame and the subtitle view, under SDL's layout
+        SbCam.attach(this, box);               // the second player (a camera in the corner), added after the film's: drawn over it
         box.addView(mLayout, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(box);
     }
@@ -276,26 +277,26 @@ public class MainActivity extends SDLActivity {
         return super.dispatchTouchEvent(e);
     }
     /* voice search: the system's speech recognizer (RecognizerIntent, the Google app on a Google TV) opens over the app,
-       listens, and hands back the best guess. That activity holds the microphone, so Origin needs no RECORD_AUDIO
+       listens, and hands back the best guess. That activity holds the microphone, so the app needs no RECORD_AUDIO
        permission. The answer waits in voiceAns for the C side's poll: "" nothing yet, "=text" heard, "-" cancelled */
     static final int REQ_VOICE = 7421;
     static volatile String voiceAns = "";
-    static Intent voiceIntent() {
+    static Intent voiceIntent(MainActivity a) {
         Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH);
         i.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        i.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search Origin");
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search " + a.getString(R.string.app_name));
         return i;
     }
     public static boolean uiVoiceAvailable() {
         final MainActivity a = self; if (a == null) return false;
-        return voiceIntent().resolveActivity(a.getPackageManager()) != null;
+        return voiceIntent(a).resolveActivity(a.getPackageManager()) != null;
     }
     public static boolean uiVoiceStart() {
         final MainActivity a = self; if (a == null) return false;
         voiceAns = "";
         a.runOnUiThread(() -> {
-            try { a.startActivityForResult(voiceIntent(), REQ_VOICE); }
+            try { a.startActivityForResult(voiceIntent(a), REQ_VOICE); }
             catch (Exception e) { Log.w(TAG, "voice search", e); voiceAns = "-"; }
         });
         return true;
@@ -325,6 +326,7 @@ public class MainActivity extends SDLActivity {
        first frame, issue #1). So the process ends here, and every launch starts a fresh one. */
     @Override protected void onDestroy() {
         SbPlayer.release();
+        SbCam.release();
         super.onDestroy();
         Log.i(TAG, "activity gone: ending the process");
         android.os.Process.killProcess(android.os.Process.myPid());

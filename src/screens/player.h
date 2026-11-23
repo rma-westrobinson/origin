@@ -17,7 +17,12 @@ void player_close(void);
 int player_waiting(void);
 /* "Play the best stream automatically": the title art and the wait line at once, Back cancels, the pick plays */
 void player_choose_best(const char *type, const char *id, const char *vid);
-int player_open(void);
+int player_open(void); /* the film has the screen (0 while it plays in the corner) */
+int player_busy(void); /* a film has the decoder: full screen or in the corner */
+int player_mini(void); /* it plays in a small window in the corner while the app is used */
+void player_mini_draw(void); /* once a frame after the page: the corner window cut out of it, a click opens the film */
+int player_mini_key(int k); /* a media key (play, pause, stop) for the corner's film; 1 when used */
+int player_mini_close(void); /* closes the corner's film; 1 when there was one */
 int player_away(void); /* pause a stream for lifecycle away; never resumes it */
 int player_nerd_lines(char (*out)[120], int max); /* Stats for nerds: what plays and how */
 int player_art_full(void);

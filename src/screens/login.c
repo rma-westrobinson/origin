@@ -1,4 +1,5 @@
 /* Sign in: a code to scan with the phone on the left, email and password on the right. */
+#include "core/brand.h"
 #include "screens/login.h"
 #include "screens/splash.h"
 #include "core/keys.h"
@@ -598,7 +599,7 @@ static void draw_phone(void) {
   float x = (SB_W - W) / 2, y = SB_H * 0.08f;
   if (L.editing)
     y -= 40; /* (room for the keyboard) */
-  text_draw("Origin", SB_W / 2, y, 34, 800, PH_TXT, -0.8f, 0, ALIGN_CENTER);
+  text_draw(APP_NAME, SB_W / 2, y, 34, 800, PH_TXT, -0.8f, 0, ALIGN_CENTER);
   y += 56;
   if (L.done || L.loadingProfiles) {
     text_draw(T(L.done ? "Signing in…" : "Loading profiles…"), SB_W / 2, y + 40, PH_TX_ROW, 600, PH_TXT2, 0, W,

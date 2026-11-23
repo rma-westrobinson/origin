@@ -33,4 +33,10 @@ void httpd_set_key_handler(int (*fn)(const char *key));
 char *httpd_take_collections(void);
 /* the same for the Trakt page's Save (the Trakt module): 1 = Trakt accepted the client id */
 void httpd_set_trakt_handler(int (*fn)(const char *key));
+/* the Camera page ("/camera"): a camera typed on the phone (name, stream address, the camera account's user and
+   password) and saved to the TV. Taken by the main thread (core/cameras.c); 1 when there was one */
+typedef struct {
+  char name[48], addr[240], user[48], pass[64];
+} HttpdCamera;
+int httpd_take_camera(HttpdCamera *out);
 #endif

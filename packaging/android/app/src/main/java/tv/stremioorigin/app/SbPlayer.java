@@ -30,6 +30,7 @@ import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.rtsp.RtspMediaSource;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.SubtitleView;
 
@@ -129,7 +130,9 @@ public final class SbPlayer {
             else if (lu.contains(".mpd")) mb.setMimeType(MimeTypes.APPLICATION_MPD);
             player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().clearOverrides()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).build());
-            player.setMediaItem(mb.build(), startSec > 0 ? (long) (startSec * 1000) : C.TIME_UNSET);
+            if (lu.startsWith("rtsp://")) {   // a security camera: over TCP (a camera's UDP is often blocked or lossy on a home network)
+                player.setMediaSource(new RtspMediaSource.Factory().setForceUseRtpTcp(true).setTimeoutMs(10000).createMediaSource(mb.build()));
+            } else player.setMediaItem(mb.build(), startSec > 0 ? (long) (startSec * 1000) : C.TIME_UNSET);
             // a fade left from the last video (a preview's sound coming up or going, frozen while the app was away) must
             // not carry on over this one: it held a film silent for seconds
             if (volAnim != null) { volAnim.cancel(); volAnim = null; }
@@ -245,6 +248,8 @@ public final class SbPlayer {
         int W = box.getWidth(), H = box.getHeight(); if (W <= 0 || H <= 0) return;
         // the box's own child area is the 16:9 rectangle: use the holder's size
         View holder = (View) clip.getParent(); if (holder != null && holder.getWidth() > 0) { W = holder.getWidth(); H = holder.getHeight(); }
+        // a small window (the film kept in a corner while the app is used): its subtitles would run over the app
+        subs.setVisibility(crop == null && win[2] < 0.9f && win[3] < 0.9f ? View.INVISIBLE : View.VISIBLE);
         int cx, cy, cw, ch, sx, sy, sw, sh;
         if (crop != null && vw > 0 && vh > 0) {
             cx = Math.round(crop[4] * W); cy = Math.round(crop[5] * H); cw = Math.round(crop[6] * W); ch = Math.round(crop[7] * H);

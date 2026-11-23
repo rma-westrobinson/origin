@@ -305,6 +305,7 @@ static int vsyncOn
 #include "screens/settings.h"
 #include "screens/splash.h"
 #include "screens/player.h"
+#include "screens/cameras.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -630,7 +631,7 @@ static void live_frame(void) {
   text_frame_begin();
   app_tick(dt);
   splash_tick(dt);
-  gfx_begin(player_live() ? RGBA(0, 0, 0, 0) : PAGE);
+  gfx_begin(player_live() || camview_live() ? RGBA(0, 0, 0, 0) : PAGE);
   app_draw();
   splash_draw();
   gfx_end();
@@ -1301,7 +1302,7 @@ int main(int argc, char **argv) {
     app_tick(dt);
     splash_tick(dt);
     Uint32 tA = SDL_GetTicks();
-    gfx_begin(player_live() ? RGBA(0, 0, 0, 0) : PAGE); /* the video plane shows through the transparent window */
+    gfx_begin(player_live() || camview_live() ? RGBA(0, 0, 0, 0) : PAGE); /* the video plane shows through the transparent window */
     {
       static int bench = -2, benchCalls = 0;
       if (bench == -2) {

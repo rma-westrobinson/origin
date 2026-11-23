@@ -23,7 +23,6 @@
 #include "ui/img.h"
 #include "ui/orbs.h"
 #include "ui/sound.h"
-#include "ui/support.h"
 #include "ui/widgets.h"
 #include "ui/qrcard.h"
 #include "screens/revpanel.h"
@@ -144,11 +143,10 @@ static const struct {
     { "set_lang", "reviews" },
     PV_YOURKEYS,
     0 },
-  { "Thank you",
-    "Made by one person in free time. No ads and no tracking.",
-    { "Something wrong? Settings \xe2\x80\xba About \xe2\x80\xba Share logs",
-      "Enjoying it? A coffee, or a star on GitHub" },
-    { "g_bug", "g_heart" },
+  { "Something wrong?",
+    "No ads and no tracking.",
+    { "Settings \xe2\x80\xba About \xe2\x80\xba Share logs" },
+    { "g_bug" },
     PV_THANKS,
     0 },
 };
@@ -169,9 +167,9 @@ typedef struct {
   int nt, nx;
 } News;
 static struct {
-  int open, closing, checked, tour, n, cur, step, from, fromStep, dir, pageSw, fromSignIn;
+  int open, closing, checked, n, cur, step, from, fromStep, dir, pageSw, fromSignIn;
   Page p[MAXP];
-  char ver[32], short_ver[16], stitle[96], smsg[400], url[400], urlShown[400], gh[300], ghShown[300];
+  char ver[32], short_ver[16];
   News news[MAXN];
   int nnews;
   double pageAt, stepAt, fromAt;
@@ -182,8 +180,6 @@ static struct {
   char speed[200];
   double doneAt;
   int speedFail;
-  int tipWant;
-  Tween tipK; /* the thank-you's codes: which shows (0 the coffee, 1 GitHub); OK turns it over */
 } W;
 static Screen card;
 static GfxTarget pic[2];
@@ -531,11 +527,10 @@ static void settings_page(float a, int focus, float usbOn, int about) {
   gfx_ring(px, py, pw, ph, 24, 1, WHITE_A(22));
   text_draw(T(about ? "About" : "Playback"), px + 54, py + 40, 38, 700, WHITE_A(255), -0.5f, 900, ALIGN_LEFT);
   if (about) {
-    static const char *AL[3] = { "Check for updates", "Share logs", "Support the project" },
-                      *AD[3] = { "You have the latest version", "Share the code and describe the issue",
-                                 "A coffee, or a star on GitHub" };
+    static const char *AL[2] = { "Check for updates", "Share logs" },
+                      *AD[2] = { "You have the latest version", "Share the code and describe the issue" };
     float ry = py + 120;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
       int f = i == focus;
       if (f) {
         float pk = ok_press(), d = 6 * pk;
@@ -1821,37 +1816,8 @@ static void sc_yourkeys(int st, float t) {
   }
 }
 
-/* -- 8. the thank-you, and the version's page: the code for a tip on a soft white tile, hearts rising beside it;
-      the second point: the Share logs card -- */
-static void tip_card(float t, const char *head, const char *msg) {
-  gfx_rrect_v(0, 0, SB_W, SB_H, 0, RGB(0x19, 0x15, 0x26), RGB(0x0b, 0x0a, 0x10));
-  porbs(0, 1);
-  float S = msg ? 560 : 640, x = msg ? SB_W - 140 - S : SB_W / 2 - S / 2,
-        y = SB_H / 2 - S / 2 - (msg ? 50 : 30) + 14 * (1 - eo(0, 0.7f, t)), br = 1 + 0.012f * sinf(t * 2.2f);
-  gfx_scale_push(br, br, x + S / 2, y + S / 2);
-  glow(x + S / 2, y + S / 2, S * 1.9f, S * 1.6f, ACC, 0.32f + 0.1f * sinf(t * 2.2f));
-  gfx_shadow(x, y + 24, S, S, 52, 60, BLACK_A(140));
-  if (W.url[0] && qr_draw(W.url, x, y, S, 52, 40))
-    gfx_rrect_v(x, y, S, S, 52, WHITE_A(0), RGBA(225, 220, 240, 30));
-  else
-    gfx_rrect(x, y, S, S, 52, WHITE_A(20));
-  gfx_scale_pop();
-  text_draw(W.urlShown, x + S / 2, y + S + 34, 36, 700, WHITE_A(225), 0, S + 300, ALIGN_CENTER);
-  for (int i = 0; i < 4; i++) {
-    float p = fmodf(t * 0.3f + i * 0.25f, 1);
-    float hx = x + S + 40 + 30 * sinf(p * 6 + i), hy = y + S - p * 460;
-    gfx_opacity_push(sinf(3.14159f * p) * 0.85f);
-    icon_draw("g_heart", hx, hy, 44 + 10 * (i % 3), ACC2);
-    gfx_opacity_pop();
-  }
-  if (msg) {
-    float tx = 140, tw = SB_W - 140 - S - 140 - 120;
-    icon_draw("g_heart", tx, y, 72, ACC2);
-    text_draw_wrapped(head, tx, y + 110, tw, 2, 76, 800, WHITE_A(255), -1.4f, ALIGN_LEFT, 84);
-    text_draw_wrapped(msg, tx, y + 290, tw, 6, 40, 500, WHITE_A(220), 0, ALIGN_LEFT, 56);
-  }
-}
-/* the Share logs card as the app shows it, rising in */
+/* -- 8. the last page of the tour: how to share logs --
+   the Share logs card as the app shows it, rising in */
 static void logs_card(float t, float a) {
   if (a <= 0.004f)
     return;
@@ -1889,36 +1855,8 @@ static void logs_howto(float t) {
   logs_card(t - 2.4f, card);
   press(K_OK, T("OK"), vis(t, 1.9f, 2.9f, 0.2f), (t - 2.2f) / 0.35f, 400, PRESS_Y);
 }
-/* the thank-you's points: how to share logs (the app's own screens), then the codes to support it and to star it, big
- */
-static void tip_switch(float t) { /* one code at a time, the pill saying which (OK turns it over) */
-  gfx_rrect_v(0, 0, SB_W, SB_H, 0, RGB(0x19, 0x15, 0x26), RGB(0x0b, 0x0a, 0x10));
-  porbs(0, 1);
-  float Q = 660, h = support_h(Q), x = SB_W / 2 - support_w(Q) / 2, y = SB_H / 2 - h / 2 + 14 * (1 - eo(0, 0.7f, t)),
-        sel = W.tipK.v;
-  glow(SB_W / 2, y + 78 + Q / 2, Q * 2, Q * 1.6f, col_mix(ACC | 0xff000000u, RGB(0xff, 0xd4, 0x5a), sel),
-       0.3f + 0.08f * sinf(t * 2.2f));
-  support_glass(sgOrb);
-  support_draw(x, y, Q, sel, 0, W.url, W.urlShown, W.gh, W.ghShown);
-  for (int i = 0; i < 4; i++) {
-    float p = fmodf(t * 0.3f + i * 0.25f, 1);
-    float hx = x + Q + 70 + 30 * sinf(p * 6 + i), hy = y + h - 60 - p * 440;
-    gfx_opacity_push(sinf(3.14159f * p) * 0.8f);
-    icon_draw(sel < 0.5f ? "g_heart" : "g_star", hx, hy, 44 + 10 * (i % 3),
-              sel < 0.5f ? ACC2 | 0xff000000u : RGB(0xff, 0xd4, 0x5a));
-    gfx_opacity_pop();
-  }
-}
-static void sc_thanks(int st, float t) {
-  if (st == 0)
-    logs_howto(t);
-  else if (W.gh[0])
-    tip_switch(t);
-  else
-    tip_card(t, NULL, NULL);
-}
 /* the version's page: its glass shown off over the brightest pictures (one flowing into the next under it), the bar's
-   focus gliding along the tabs, and the two codes on a sheet of the same glass in the middle */
+   focus gliding along the tabs */
 static void sc_news(float t) {
   static const int ART[3] = { 5, 1, 6 };
   const float P = 6.0f;
@@ -1940,15 +1878,6 @@ static void sc_news(float t) {
         pill = pt < 8.0f ? 1 + glide(5.0f, pt)
                          : 2 - glide(9.0f, pt); /* calm: on Home, now and then over to Library and back */
   topbar(1, pill, 0, 0, 0);
-  if (!W.gh[0] || W.tour)
-    return; /* (in the tour: the codes are the thanks page's, never twice) */
-  float Q = 500, sw = support_w(Q), h = support_h(Q), pw = sw + 120, phh = h + 110, px = SB_W / 2 - pw / 2,
-        py = 150 + (SB_H - 150) / 2 - phh / 2 + 14 * (1 - eo(0, 0.7f, t)), sel = W.tipK.v;
-  wSoft = 0.4f;
-  wglass(px, py, pw, phh, 56, 0.9f, 9);
-  lglass_light(0); /* the sheet: the bar's glass, large, bending gently */
-  support_glass_picture(f > 0.5f && sgT2 ? sgT2 : sgT);
-  support_draw(px + 60, py + 55, Q, sel, 0, W.url, W.urlShown, W.gh, W.ghShown);
 }
 static void scene(int pv, int st, float t) {
   switch (pv) {
@@ -1974,7 +1903,8 @@ static void scene(int pv, int st, float t) {
     sc_yourkeys(st + ykOff, t);
     break;
   case PV_THANKS:
-    sc_thanks(st, t);
+    (void)st;
+    logs_howto(t);
     break;
   default:
     sc_news(t);
@@ -2208,23 +2138,20 @@ static void page_dots(float cx, float y) {
     xx += w[i] + sp;
   }
 }
-static int at_codes(void);
 static int at_keys(void);
 static int at_ctl(void) {
   const Page *p = &W.p[W.cur];
   return p->ctl && W.step == p->nb - 1;
 }
 static void hints(float a) {
-  int lastPage = W.cur == W.n - 1, last = lastPage && W.step >= W.p[W.cur].nb - 1, rtl = app_rtl(), ctl = at_ctl(),
-      codes = at_codes();
+  int lastPage = W.cur == W.n - 1, last = lastPage && W.step >= W.p[W.cur].nb - 1, rtl = app_rtl(), ctl = at_ctl();
   uint32_t c = WHITE_A((int)(215 * a));
-  const char *ok = codes               ? (W.tipWant ? T("Buy me a coffee") : T("Star on GitHub"))
-                   : at_keys()         ? (SB_WINDOWED && W.step + ykOff == 0 ? T("Add the key") : T("Show the code"))
+  const char *ok = at_keys()         ? (SB_WINDOWED && W.step + ykOff == 0 ? T("Add the key") : T("Show the code"))
                    : ctl && !best_on() ? (best_speed_busy() ? T("Measuring\xe2\x80\xa6") : T("Turn on"))
                    : last              ? T("Close")
                                        : T("Next");
   const char *nx = T("Next page"), *bk = lastPage ? T("Close") : T("Skip");
-  int showNx = !lastPage, showBk = !last || codes;
+  int showNx = !lastPage, showBk = !last;
   float g = 44, wo = 38 + 10 + text_width(ok, 22, 600, 0), wn = showNx ? 38 + 10 + text_width(nx, 22, 600, 0) + g : 0,
         wb = showBk ? 38 + 10 + text_width(bk, 22, 600, 0) + g : 0;
   gfx_scale_push(1.25f, 1.25f, rtl ? MX : SB_W - MX, BOTY);
@@ -2349,10 +2276,6 @@ static void on_speed(int ok, double mbps, void *ud) {
   orbs_push(&orbs[0], ORB_DONE, 1.2f);
   sound_play(SND_TAB);
 }
-static int at_codes(void) {
-  const Page *p = &W.p[W.cur];
-  return W.gh[0] && ((p->pv == PV_NEWS && !W.tour) || (p->pv == PV_THANKS && W.step == p->nb - 1));
-} /* (in the tour the codes are the thanks page's alone) */
 static int at_keys(void) {
   return W.p[W.cur].pv == PV_YOURKEYS;
 }
@@ -2365,12 +2288,6 @@ static void next(void) {
       qrcard_show_trakt(NULL, NULL);
     return;
   } /* the key's code; Right or Down go on */
-  if (at_codes()) {
-    W.tipWant = !W.tipWant;
-    tween_to(&W.tipK, (float)W.tipWant, 0.5f, EASE_IN_OUT);
-    orbs_push(&orbs[0], W.tipWant ? ORB_RIGHT : ORB_LEFT, 0.7f);
-    return;
-  } /* the other code (Back closes) */
   if (at_ctl() && !best_on()) {
     if (!best_speed_busy()) {
       W.speedFail = 0;
@@ -2432,7 +2349,7 @@ static void follow(void) {
     return;
   if (p->ctl && W.step == p->nb - 1)
     return; /* (a switch to set: it waits there) */
-  if (at_codes() || at_keys())
+  if (at_keys())
     return; /* (a code to scan, a key to type: it waits there) */
   double now = app_now();
   float tot = page_len(W.cur);
@@ -2467,7 +2384,6 @@ static void tick(float dt) {
   timer_tick(&W.sw, dt);
   tween_tick(&W.dot, dt);
   tween_tick(&W.focus, dt);
-  tween_tick(&W.tipK, dt);
   nudge_tick(&W.nudge, dt);
   float want = best_on() ? 1 : 0;
   if (W.knob.to != want)
@@ -2566,8 +2482,8 @@ int welcome_covers(void) {
   return W.open && !W.closing && !W.in.on && app_overlay == &card;
 }
 
-/* whatsnew.json: { "version", "items": [ { "title", "text", "icon" } or "a line", ... ], "support": { "title",
-   "message", "url" } } An item may carry "needs": "cast" | "usb" | "dts" | "tv" (or a list of them: left out where the
+/* whatsnew.json: { "version", "items": [ { "title", "text", "icon" } or "a line", ... ] } An item may
+   carry "needs": "cast" | "usb" | "dts" | "tv" (or a list of them: left out where the
    package lacks one) and "title_<package>" / "text_<package>" (its words there; package: webos, android, windows,
    macos) */
 static const char *wn_pkg(void) {
@@ -2675,8 +2591,6 @@ static int load(void) {
   char p[1200];
   snprintf(p, sizeof p, "%s/whatsnew.json", plat_asset_dir());
   W.nnews = 0;
-  W.url[0] = 0;
-  W.smsg[0] = 0;
   snprintf(W.ver, sizeof W.ver, "%s", update_current());
   FILE *f = fopen(p, "rb");
   if (!f)
@@ -2715,26 +2629,7 @@ static int load(void) {
     if (nw->t[0])
       W.nnews++;
   }
-  const cJSON *s = js_obj(j, "support");
-  snprintf(W.url, sizeof W.url, "%s", js_str(s, "url", ""));
-  snprintf(W.gh, sizeof W.gh, "%s", js_str(s, "github", ""));
-  {
-    const char *g = W.gh;
-    if (!strncmp(g, "https://", 8))
-      g += 8;
-    snprintf(W.ghShown, sizeof W.ghShown, "%s", g);
-  }
-  snprintf(W.stitle, sizeof W.stitle, "%s", js_str(s, "title", ""));
-  snprintf(W.smsg, sizeof W.smsg, "%s", js_str(s, "message", ""));
   cJSON_Delete(j);
-  const char *u = W.url;
-  if (!strncmp(u, "https://", 8))
-    u += 8;
-  else if (!strncmp(u, "http://", 7))
-    u += 7;
-  if (!strncmp(u, "www.", 4))
-    u += 4;
-  snprintf(W.urlShown, sizeof W.urlShown, "%s", u);
   /* "1.0.0" reads as "1.0" */
   snprintf(W.short_ver, sizeof W.short_ver, "%s", W.ver);
   size_t L = strlen(W.short_ver);
@@ -2745,7 +2640,6 @@ static int load(void) {
 /* the tour (tour 1) or the version's page, over whatever is on screen */
 static void open_guide(int tour) {
   W.n = 0;
-  W.tour = tour;
   if (tour) {
     for (int i = 0; i < NTOUR; i++) {
       if (!SB_REMOTE_GUIDE && (TOUR[i].pv == PV_KEYS || TOUR[i].pv == PV_HOLD))
@@ -2818,7 +2712,7 @@ static void open_guide(int tour) {
     snprintf(pg->title, sizeof pg->title, "%s", "What\xe2\x80\x99s new");
   }
   if (tour && W.n < MAXP &&
-      load()) { /* the first start: the version's news after the tour, the thanks (support) page staying last */
+      load()) { /* the first start: the version's news after the tour, the last page (Share logs) staying last */
     int at = W.n;
     if (at > 0 && W.p[at - 1].pv == PV_THANKS)
       at--;
@@ -2854,8 +2748,6 @@ static void open_guide(int tour) {
   W.speed[0] = 0;
   W.doneAt = 0;
   memset(orbs, 0, sizeof orbs);
-  W.tipWant = 0;
-  tween_set(&W.tipK, 0);
   timer_start(&W.in, 0.9f);
   app_ambient_guide(1);
   app_overlay = &card;
@@ -2933,19 +2825,9 @@ void welcome_show_guide(void) {
   W.checked = 1;
   open_guide(1);
 }
-const char *welcome_support_url(void) {
-  if (!W.url[0])
-    load();
-  return W.url;
-}
 void welcome_show_whatsnew(void) {
   if ((W.open && !W.closing) || !load())
     return;
   W.checked = 1;
   open_guide(0);
 } /* Settings > About: the version's page again */
-const char *welcome_github_url(void) {
-  if (!W.url[0])
-    load();
-  return W.gh;
-}

@@ -3,6 +3,7 @@
    the data folder (400 KB, then the newer half is kept) and in memory (the last 300). A crash puts stderr back
    before the crash report is written, so the report reaches the terminal / device log even though this
    thread never sees it. */
+#include "core/brand.h"
 #include "core/applog.h"
 #include "core/logseal.h"
 #include "core/net.h"
@@ -420,7 +421,7 @@ static void bundle_head(Buf *bp) {
   Buf b = *bp;
   char ts[32], l[512];
   iso_now(ts);
-  snprintf(l, sizeof l, "Origin logs - %s\n", ts);
+  snprintf(l, sizeof l, APP_NAME " logs - %s\n", ts);
   b_add(&b, l);
   snprintf(l, sizeof l, "app %s %s (build %.12s)", SB_APP_ID, update_current(), buildId + 10);
   b_add(&b, l);

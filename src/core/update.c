@@ -3,6 +3,7 @@
    Channel (it downloads, checks the SHA-256 and installs as root); before it starts, a small script handed to
    the Channel waits for the new version's appinfo.json and opens the app again, since nothing else in this
    process survives the install. */
+#include "core/brand.h"
 #include "core/update.h"
 #include <math.h>
 #include "ui/glass.h"
@@ -557,7 +558,7 @@ void update_install(void) {
     return; /* (a check under way may still change what is offered) */
 #if SB_UPDATE_IN_BROWSER /* (macOS: the DMG downloads in the browser; the user drags the new app over the old one) */
   snprintf(U.msg, sizeof U.msg, "%s",
-           plat_open_url(U.avail.url) ? T("Downloading in your browser: open it and drag Origin to Applications")
+           plat_open_url(U.avail.url) ? T1("Downloading in your browser: open it and drag {name} to Applications", "name", APP_NAME)
                                       : T("The update failed"));
   changed();
   return;

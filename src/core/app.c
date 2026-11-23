@@ -18,6 +18,8 @@
 #include "ui/icon.h"
 #include "ui/palette.h"
 #include "screens/player.h"
+#include "screens/cameras.h"
+#include "screens/campip.h"
 #include "screens/saver.h"
 #include "core/hit.h"
 #include "core/nuvio.h"
@@ -642,6 +644,12 @@ static void toast_draw(void) {
 }
 static double exitAt = -10;
 void exit_ask(void) {
+  if (player_mini_close())
+    return; /* a film in the corner: Back at the last page closes it first */
+  if (campip_active()) {
+    campip_close();
+    return; /* and so does a camera in the corner */
+  }
   if (NOW - exitAt < 2.5) {
     app_quit();
     return;
@@ -2251,6 +2259,10 @@ static void key_core(int k, int down, int repeat) {
       ok_up();
     return;
   }
+  if (player_mini_key(k))
+    return; /* play, pause, stop: for the film in the corner */
+  if (campip_key(k))
+    return; /* and for the camera in the corner */
   /* the pointer appearing or hiding is the TV's own doing (it hides by itself, and shows when the remote is
      picked up): not input that stops the background trailer */
   if (k != K_CURSOR_SHOW && k != K_CURSOR_HIDE) {
@@ -2440,6 +2452,8 @@ int app_away_take_leave(void) {
 void app_away_tick(void) {
   if (app_away_take_leave() || (app_away() && !awayHandled)) {
     int stream = player_away();
+    camview_close(); /* a camera is let go: its connection and its decoder */
+    campip_close();
     btr_release();
     phone_peek_shut_now();
     saver_stop();
@@ -2529,6 +2543,7 @@ void app_tick(float dt) {
        and the canvas is the TV's (back upright after) */
   castlink_tick(dt); /* (a phone drives the film too: before the app rests under it) */
   player_tick(dt);
+  campip_tick(); /* (before the app rests under a film: the camera in the corner goes on) */
   if (player_open() && player_cover() >= 0.999f)
     return; /* the app rests while the film plays (not while the player fades over it or away from it) */
   if (screens[SCR] && screens[SCR]->tick)
@@ -2636,7 +2651,7 @@ void app_ambient_draw(void) {
     ambient_draw();
 } /* (the guide's, once a frame) */
 static void page_draw(void) {
-  if (welcome_covers() && app_overlay && app_overlay->draw) {
+  if ((welcome_covers() || camview_covers()) && app_overlay && app_overlay->draw) {
     app_overlay->draw();
     return;
   } /* the guide's page hides all of it */
@@ -2746,6 +2761,7 @@ void app_draw(void) {
     player_draw();
     sx_layer(0);
     sx_flush();
+    campip_draw(); /* a camera over the film: its window cut out of the controls */
     toast_draw();
     saver_draw();
     return;
@@ -2756,6 +2772,8 @@ void app_draw(void) {
   } /* nothing under it is seen: not drawn */
   page_draw();
   sx_flush(); /* a logo or poster on its way from the last page */
+  player_mini_draw(); /* a film in the corner: its window cut out of the page */
+  campip_draw(); /* a camera in the corner (never with the film's) */
   toast_draw();
   saver_draw();
 }

@@ -67,7 +67,7 @@ static void h_load(const char *url, const char *mime, const char *titleId, void 
   (void)mime;
   (void)titleId;
   (void)ud;
-  if (player_open())
+  if (player_busy())
     return;
   fprintf(stderr, "[trailer] background %s\n", url);
   B.loadAt = 0;
@@ -97,7 +97,7 @@ static void h_hide(int now, void *ud) {
     tween_set(&CD.a, 0);
   else
     tween_to(&CD.a, 0, 0.4f, EASE_CSS_EASE);
-  if (B.own && !player_open()) {
+  if (B.own && !player_busy()) {
     if (now) {
       video_set_volume(0, 0);
       video_pause();
@@ -110,7 +110,7 @@ static void h_hide(int now, void *ud) {
 }
 static void h_unload(void *ud) {
   (void)ud;
-  if (B.own && !player_open())
+  if (B.own && !player_busy())
     video_unload();
   B.own = 0;
   B.live = 0;
@@ -135,7 +135,7 @@ void btr_release(void) {
 }
 void btr_tick(float dt) {
   trailer_tick();
-  if (player_open() && (B.own || bgt_state() != BGT_OFF)) {
+  if (player_busy() && (B.own || bgt_state() != BGT_OFF)) {
     B.own = 0;
     btr_release();
   } /* the player has the decoder now */
@@ -148,7 +148,7 @@ void btr_tick(float dt) {
                ow; /* (a card set to wait longer: its clip, too, as if the key came that much later) */
   if (form_touch()) { /* a phone: only the card a long press opened plays, at once (no focus to rest on) */
     f = phone_peek_item();
-    BgtView pv = { phone_peek_since() + 3.0f, f != NULL, f, player_open() || !app_splash_done || saver_on(), 0,
+    BgtView pv = { phone_peek_since() + 3.0f, f != NULL, f, player_busy() || !app_splash_done || saver_on(), 0,
                    pace_period() > 21.5 };
     pv.hero = 1;
     bgt_tick(&pv);
@@ -159,7 +159,7 @@ void btr_tick(float dt) {
     cardScr,
     f,
     topNav.active || app_overlay != NULL ||
-        /* (a sheet or the long-press menu: it gives way, softly, and none starts under it) */ player_open() ||
+        /* (a sheet or the long-press menu: it gives way, softly, and none starts under it) */ player_busy() ||
         !app_splash_done || saver_on(),
     board_spot_up(),
     pace_period() > 21.5
@@ -169,7 +169,7 @@ void btr_tick(float dt) {
   v.nnear = cardScr ? board_near_items(v.near, 10) : 0;
   bgt_tick(&v);
 played:
-  if (B.own && !player_open()) {
+  if (B.own && !player_busy()) {
     video_pump();
     VidState vs = video_state();
     double now = app_now();
@@ -261,7 +261,7 @@ played:
   }
   if (B.pauseAt && app_now() >= B.pauseAt) {
     B.pauseAt = 0;
-    if (B.own && !player_open()) {
+    if (B.own && !player_busy()) {
       video_pause();
       B.held = 1;
     }

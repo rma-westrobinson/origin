@@ -58,6 +58,17 @@ jobs:
         # build-engine.sh writes to build/android/<abi>/ by default, but tools/targets/android.sh looks in $AB/engine/<abi>/
         run: ENGINE_OUT="$AB/engine/armeabi-v7a/libsbengine.so" bash tools/build-engine.sh android-armeabi-v7a
 
+      - name: Restore release keystore
+        # The signing key is stable (GitHub secrets): every build is signed with the same key, so updates install
+        # over the old APK. build-apk.sh reuses an existing keystore and only makes a new one when none is there,
+        # so restoring it here is enough. Without this step the runner is fresh each time and every build gets a
+        # new key, which forces an uninstall.
+        run: |
+          mkdir -p "$ORIGIN_BUILD/keys"
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > "$ORIGIN_BUILD/keys/android-release.jks"
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > "$ORIGIN_BUILD/keys/android-release.pass"
+          chmod 600 "$ORIGIN_BUILD/keys/android-release.pass"
+
       - name: Build release APK
         run: bash tools/android/build-apk.sh
 

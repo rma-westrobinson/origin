@@ -2,12 +2,6 @@
   "version": "3.0.0",
   "items": [
     {
-      "icon": "wn_new",
-      "title": "Origin, moved over",
-      "text": "Origin now installs under its own name, so it can sit beside Stremio Origin. Your sign-in and settings came with it, and the old copy was removed.",
-      "text_android": "Origin now installs under its own name, so it can sit beside Stremio Origin. Your sign-in and settings came with it. Android asks once before it removes the old copy."
-    },
-    {
       "icon": "wn_people",
       "title": "A new top bar",
       "text": "Search, Home, Shows, Movies, Catalogue and My List across the top. Your profile picture opens profiles, Settings and Exit."
@@ -17,11 +11,5 @@
       "title": "Shows, Movies and Anime",
       "text": "Each tab opens on a billboard with rows of its own and your Continue Watching first, with no limit on how many it shows. Turn on Anime in Settings > Appearance."
     }
-  ],
-  "support": {
-    "title": "Thank you",
-    "message": "Thank you!",
-    "url": "https://ko-fi.com/blueee123",
-    "github": "https://github.com/betterstremio/origin"
-  }
+  ]
 }

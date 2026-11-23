@@ -1,5 +1,6 @@
 #include "screens/player.h"
 #include "screens/board.h"
+#include "screens/campip.h"
 #include "core/app.h"
 #include "core/keys.h"
 #include "core/i18n.h"
@@ -15,6 +16,7 @@
 #include "ui/icon.h"
 #include "ui/widgets.h"
 #include "core/touch.h"
+#include "core/hit.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -271,6 +273,7 @@ typedef struct {
 } PPrompt;
 static struct {
   int open, closing, live, failed, started;
+  int mini; /* picture in picture: the film plays in a corner, the app is used (player_open() is 0) */
   double openedAt;
   char type[16], id[64], vid[80], name[256], logo[512], bg[512], poster[512], sname[600], saddon[96], url[SB_URL_MAX],
       alt[SB_URL_MAX];
@@ -518,6 +521,9 @@ static struct {
 static MkvSession *mkv; /* the subtitle reader of the stream playing (outside P: P starts over per source) */
 static unsigned p2pTok;
 static void close_player(int goNext, int goSim);
+static void mini_drop(void);
+static int mini_ok(void);
+static void minimize(void);
 static void save_progress(int push);
 static void show_osd(int keepFocus);
 static void ph_chip_show(void);
@@ -541,7 +547,13 @@ static float clock_ph(double period) {
   return (float)fmod(now_() / period, 1.0);
 }
 int player_open(void) {
+  return P.open && !P.mini;
+}
+int player_busy(void) {
   return P.open;
+} /* a film has the decoder: full screen or in the corner */
+int player_mini(void) {
+  return P.open && P.mini;
 }
 int player_away(void) {
   if (!P.open || P.closing)
@@ -555,18 +567,18 @@ int player_away(void) {
   return 0;
 }
 int player_art_full(void) {
-  return P.open && P.artA.v > 0.98f;
+  return P.open && !P.mini && P.artA.v > 0.98f;
 } /* the loading art covers the screen */
 float player_cover(void) {
-  return P.open ? P.in.v : 0;
+  return P.open && !P.mini ? P.in.v : 0;
 }
 /* the page under the player: while it covers it only partly, and while a logo flies between them over the art
    (the page's copy is the one that flies back) */
 int player_page_under(void) {
-  return P.open && (P.in.v < 0.999f || (sx_flying() && !P.live));
+  return P.open && !P.mini && (P.in.v < 0.999f || (sx_flying() && !P.live));
 }
 int player_live(void) {
-  return P.open && P.live && !P.closing && P.artA.v < 0.02f;
+  return P.open && !P.mini && P.live && !P.closing && P.artA.v < 0.02f;
 }
 static int paused(void) {
   return video_state() == VID_PAUSED;
@@ -2743,6 +2755,8 @@ static void build_btns(void) {
     B("aud", "p_aud", T("Audio"), 0);
   const char *am = !strcmp(P.aspect, "fill") ? "Fill the screen" : !strcmp(P.aspect, "zoom") ? "Zoom" : "Original";
   B("asp", "p_asp", T(am), 0);
+  if (!P.isTrailer && campip_available() && cam_count() > 0)
+    B("cam", "set_cam", T("Camera in the corner"), 0); /* a security camera floats over the film (screens/campip.h) */
 #undef B
   P.nbtn = i;
   if (P.bIdx >= i)
@@ -4819,6 +4833,8 @@ static void act(const char *id) {
     next_auto();
   else if (!strcmp(id, "cc"))
     cc_toggle();
+  else if (!strcmp(id, "cam"))
+    campip_toggle();
   else
     open_tray(!strcmp(id, "eps") ? 1 : !strcmp(id, "src") ? 2 : !strcmp(id, "aud") ? 3 : 4);
   arm_hide();
@@ -4859,7 +4875,10 @@ static void back(void) {
     hide_osd();
     return;
   }
-  close_player(0, 0);
+  if (mini_ok())
+    minimize();
+  else
+    close_player(0, 0);
 }
 static void ss_exit(void) {
   P.ssOn = 0;
@@ -5622,6 +5641,8 @@ static void on_best_done(const Stream *s, const BestRate *r, void *ud) {
    the player shows that very picture, already loaded, so it always flies in and is never drawn again */
 static char pageLogo[512], pageLogoId[64];
 static void open_title(const char *type, const char *id) {
+  if (P.mini)
+    mini_drop(); /* another title picked while one plays in the corner: it takes its place, full screen */
   if (P.open && P.rateI && strcmp(P.id, id)) {
     P.rateI = 0;
     video_set_rate(1);
@@ -5972,6 +5993,10 @@ static double closeAt,
 static void close_player(int goNext, int goSim) {
   if (!P.open || P.closing)
     return;
+  if (P.mini) {
+    mini_drop();
+    return;
+  }
   if (bestTok) {
     best_choose_cancel(bestTok);
     bestTok = 0;
@@ -6026,6 +6051,132 @@ static void close_step(void) {
   }
   if (P.exitFade && P.in.v <= 0.001f && !P.in.on)
     finish_close();
+}
+
+/* ---- picture in picture: Back leaves a film that is playing in a small window in the corner, and the app goes on
+   under it (player_open() is 0 meanwhile: keys, drawing and screens are the app's). The one decoder keeps the film; the
+   window is cut out of the page (gfx_hole) and the video plane shows through it. Picking a title (open_title), Stop, or
+   Back at the last page closes it; a click on it brings the film back full screen. ---- */
+#define PIP_W 480.0f
+#define PIP_H 270.0f
+#define PIP_M 48.0f
+static void pip_rect(float *x, float *y, float *w, float *h) {
+  *w = fminf(PIP_W, SB_W * 0.4f); /* (a phone's narrow canvas: smaller) */
+  *h = *w * PIP_H / PIP_W;
+  float m = fminf(PIP_M, SB_W * 0.04f);
+  *x = app_rtl() ? m : SB_W - m - *w;
+  *y = SB_H - m - *h;
+}
+static int mini_ok(void) {
+  if (!P.open || P.closing || P.mini || !P.started || !P.live || P.failed)
+    return 0;
+  if (!strcmp(store_get("pipBack", "true"), "false"))
+    return 0;
+  VidState s = video_state();
+  return s == VID_PLAYING || s == VID_PAUSED || s == VID_BUFFERING;
+}
+static void minimize(void) {
+  if (P.mode == 1)
+    hide_osd();
+  if (form_touch()) {
+    player_touch_cancel();
+    ph_gest_restore();
+  }
+  P.rateI = 0;
+  video_set_rate(1);
+  P.endGoAt = 0;
+  P.prompt.autoN = 0;
+  save_progress(1);
+  campip_close(); /* the film takes the corner: a camera and a film in the corner never show together */
+  P.mini = 1;
+  sx_begin_quick(0); /* the player's logo moves back to the page, as when it closes */
+  accent_scope(SCR == SCR_DETAIL ? P.id : NULL, P.poster, P.logo);
+  float x, y, w, h;
+  pip_rect(&x, &y, &w, &h);
+  video_set_window(x, y, w, h);
+  fprintf(stderr, "[player] in the corner\n");
+}
+/* the corner's film ends or is dropped: everything is let go at once (no fade: nothing is on screen but the window) */
+static void mini_drop(void) {
+  if (!P.open || !P.mini)
+    return;
+  VidState s = video_state();
+  if (s == VID_PLAYING || s == VID_PAUSED || s == VID_BUFFERING)
+    save_progress(1);
+  hls_conv_stop();
+  finish_close();
+  video_set_window(0, 0, SB_W, SB_H); /* the next picture starts where a film's goes, not in the corner */
+}
+static void mini_tick(void) {
+  video_pump();
+  VidState vs = video_state();
+  if (vs == VID_ENDED) {
+    save_progress(1);
+    mark_watched();
+    mini_drop();
+    return;
+  }
+  if (vs == VID_ERROR) {
+    mini_drop();
+    toast(T("Playback error"), 2500, NULL);
+    return;
+  }
+  if (vs == VID_PLAYING && now_() - P.lastSave >= 10) {
+    save_progress(0);
+    if (dur() > 0 && video_time() / dur() > 0.95)
+      mark_watched();
+  }
+}
+static void mini_expand(int a, int b) {
+  (void)a;
+  (void)b;
+  if (!P.open || !P.mini)
+    return;
+  P.mini = 0;
+  P.lastVw = -1; /* the picture is placed full screen again by the next tick */
+  show_osd(0);
+}
+void player_mini_draw(void) {
+  if (!P.open || !P.mini)
+    return;
+  float x, y, w, h;
+  pip_rect(&x, &y, &w, &h);
+  video_set_window(x, y, w, h);
+  gfx_shadow(x, y + 10, w, h, 18, 36, BLACK_A(170));
+  gfx_hole(x, y, w, h, 16, 1);
+  gfx_ring(x, y, w, h, 16, 2, WHITE_A(70));
+  if (paused()) {
+    float bw = w / 48, bh = w / 12, cx = x + w / 2, cy = y + h / 2;
+    gfx_rrect(cx - bw * 1.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
+    gfx_rrect(cx + bw * 0.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
+  }
+  hit_act(x, y, w, h, mini_expand, 0, 0);
+}
+/* the remote's media keys act on the corner's film; 1 when the key was used */
+int player_mini_key(int k) {
+  if (!P.open || !P.mini)
+    return 0;
+  if (k == K_PLAYPAUSE || k == K_PLAY || k == K_PAUSE) {
+    if (k == K_PLAYPAUSE ? paused() : k == K_PLAY)
+      video_play();
+    else if (!paused()) {
+      video_pause();
+      save_progress(1);
+    }
+    return 1;
+  }
+  if (k == K_STOP) {
+    mini_drop();
+    return 1;
+  }
+  return 0;
+}
+/* Back at the last page: the corner's film is closed first (instead of asking to exit); 1 when there was one */
+int player_mini_close(void) {
+  if (!P.open || !P.mini)
+    return 0;
+  mini_drop();
+  return 1;
 }
 
 /* ---- per frame ---- */
@@ -6441,6 +6592,10 @@ void player_tick(float dt) {
   subs_pump(); /* subtitle files and lists, fetched on their own threads */
   if (!P.open)
     return;
+  if (P.mini) {
+    mini_tick();
+    return;
+  }
   video_pump();
   sync_tick();
   css();

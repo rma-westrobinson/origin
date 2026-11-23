@@ -5,6 +5,7 @@
    dimmed and with its shading baked in: per frame it is two picture quads and a few small things. Every 40 s one thing
    moves (the mark, then the clock and the title, which trade sides): the glass flows there, the title fades across, so
    nothing stays on the same pixels of the panel. */
+#include "core/brand.h"
 #include "screens/saver.h"
 #include "screens/player.h"
 #include "core/app.h"
@@ -442,7 +443,7 @@ void saver_draw(void) {
   /* the mark: top left (or right), "Origin" in a pill of glass that flows to the other corner when it moves */
   static float w1 = -1, wc;
   if (w1 < 0) {
-    w1 = text_width("Origin", 36, 800, 0.2f);
+    w1 = text_width(APP_NAME, 36, 800, 0.2f);
     wc = text_width(":", 88, 400, -1.5f) + 4;
   } /* measured once */
   float dt = app_dt(), dimA2 = dim;
@@ -461,7 +462,7 @@ void saver_draw(void) {
       gfx_scale_push(sx, sy, SS.mX + mw / 2, SS.mY + mh / 2);
       ss_glass(SS.mX, SS.mY, mw, mh, mh / 2, 22, dimA2);
       float x = SS.mX + 32, y = SS.mY + (mh - text_line_height(36)) / 2;
-      text_draw("Origin", x, y, 36, 800, WHITE_A(230), 0.2f, 0, ALIGN_LEFT);
+      text_draw(APP_NAME, x, y, 36, 800, WHITE_A(230), 0.2f, 0, ALIGN_LEFT);
       gfx_scale_pop();
       gfx_opacity_pop();
     }

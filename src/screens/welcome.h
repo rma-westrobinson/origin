@@ -12,6 +12,4 @@ void welcome_open_now(void); /* right after signing in: the guide (or the versio
                                 loading fades off it) */
 void welcome_show_whatsnew(void);
 /* the version's page again, now (Settings > About) */ /* the tour again, now, over the page (Settings > About) */
-const char *welcome_support_url(void); /* the address to support the project (whatsnew.json), "" none */
-const char *welcome_github_url(void); /* the project on GitHub (whatsnew.json), "" none */
 #endif

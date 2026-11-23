@@ -67,7 +67,14 @@ static const char *PK[] = {
   "sign in, then Settings \xe2\x80\xba Your API Apps \xe2\x80\xba New Application. Any name; as the redirect URI paste",
   "then Save and copy the Client ID.",
   "Client ID",
-  "Trakt didn\xe2\x80\x99t accept this id."
+  "Trakt didn\xe2\x80\x99t accept this id.",
+  "Add a camera",
+  "Camera name",
+  "Stream address",
+  "Camera account user",
+  "Camera account password",
+  "Use the camera account made in the Tapo app. It is not your Tapo login. It stays on your TV.",
+  "The TV did not accept this camera."
 };
 #define NPK (int)(sizeof PK / sizeof PK[0])
 static struct {
@@ -307,6 +314,99 @@ static void trakt_page(Buf *b) {
   b_s(b, ";};x.send();};</script></body></html>");
 }
 
+/* Camera: its name, stream address and the camera account, typed on the phone and saved to the TV (POST /camera/set) */
+static void camera_page(Buf *b) {
+  head(b, pt("Add a camera"));
+  b_s(b, "<h1>");
+  hx(b, pt("Add a camera"));
+  b_s(b, "</h1><p>");
+  hx(b, pt("Use the camera account made in the Tapo app. It is not your Tapo login. It stays on your TV."));
+  b_s(b, "</p>");
+  b_s(b, "<input id=\"n\" autocomplete=\"off\" placeholder=\"");
+  hx(b, pt("Camera name"));
+  b_s(b, "\"><input id=\"a\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"");
+  hx(b, pt("Stream address"));
+  b_s(b, " rtsp://192.168.1.50:554/stream1\" style=\"margin-top:12px\"><input id=\"u\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"");
+  hx(b, pt("Camera account user"));
+  b_s(b, "\" style=\"margin-top:12px\"><input id=\"p\" type=\"password\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" placeholder=\"");
+  hx(b, pt("Camera account password"));
+  b_s(b, "\" style=\"margin-top:12px\"><button id=\"b\">");
+  hx(b, pt("Save"));
+  b_s(b,
+      "</button><small id=\"s\"></small><script>"
+      "var s=document.getElementById(\"s\");function v(i){return document.getElementById(i).value.trim();}"
+      "document.getElementById(\"b\").onclick=function(){s.textContent=");
+  js(b, pt("Checking\xe2\x80\xa6"));
+  b_s(b, ";var x=new XMLHttpRequest();x.open(\"POST\",location.pathname+\"/set\");"
+         "x.setRequestHeader(\"Content-Type\",\"application/x-www-form-urlencoded\");"
+         "x.onload=function(){s.textContent=x.status===204?");
+  js(b, pt("Saved. You can close this page."));
+  b_s(b, ":");
+  js(b, pt("The TV did not accept this camera."));
+  b_s(b, ";};x.onerror=function(){s.textContent=");
+  js(b, pt("Can\xe2\x80\x99t reach the TV"));
+  b_s(b, ";};x.send(\"name=\"+encodeURIComponent(v(\"n\"))+\"&addr=\"+encodeURIComponent(v(\"a\"))+\"&user=\"+encodeURIComponent(v(\"u\"))"
+         "+\"&pass=\"+encodeURIComponent(document.getElementById(\"p\").value));};</script></body></html>");
+}
+static void reply(int fd, int code, const char *extra, const char *body, size_t blen);
+static void qparam(const char *q, const char *name, char *out, size_t cap);
+static void clean_text(const char *in, char *out, size_t cap);
+static HttpdCamera camPend; /* (under mu) a camera the phone saved, waiting for the main thread */
+static int camHas;
+#define CAM_BODY_MAX 2048
+static void camera_set(int fd, const char *got, size_t have, long want) {
+  if (want <= 0 || want > CAM_BODY_MAX) {
+    reply(fd, want > 0 ? 413 : 400, NULL, NULL, 0);
+    return;
+  }
+  char t[CAM_BODY_MAX + 1];
+  size_t n = have > (size_t)want ? (size_t)want : have;
+  memcpy(t, got, n);
+  while (n < (size_t)want) {
+    ssize_t r = recv(fd, t + n, (size_t)want - n, 0);
+    if (r < 0 && errno == EINTR)
+      continue;
+    if (r <= 0)
+      break;
+    n += (size_t)r;
+  }
+  t[n] = 0;
+  HttpdCamera c;
+  memset(&c, 0, sizeof c);
+  char raw[300];
+  qparam(t, "name", raw, sizeof raw);
+  clean_text(raw, c.name, sizeof c.name);
+  qparam(t, "addr", c.addr, sizeof c.addr); /* an address and a password as typed: no cleaning that would change them */
+  qparam(t, "user", c.user, sizeof c.user);
+  qparam(t, "pass", c.pass, sizeof c.pass);
+  const char *fields[3] = { c.addr, c.user, c.pass };
+  for (int i = 0; i < 3; i++)
+    for (const char *p = fields[i]; *p; p++)
+      if ((unsigned char)*p < 0x20 || (i == 0 && *p == ' ')) {
+        reply(fd, 400, NULL, NULL, 0);
+        return;
+      }
+  if (n != (size_t)want || !c.addr[0]) {
+    reply(fd, 400, NULL, NULL, 0);
+    return;
+  }
+  pthread_mutex_lock(&mu);
+  camPend = c;
+  camHas = 1;
+  pthread_mutex_unlock(&mu);
+  reply(fd, 204, NULL, NULL, 0);
+}
+int httpd_take_camera(HttpdCamera *out) {
+  pthread_mutex_lock(&mu);
+  int has = camHas;
+  if (has)
+    *out = camPend;
+  camHas = 0;
+  memset(&camPend, 0, sizeof camPend);
+  pthread_mutex_unlock(&mu);
+  return has;
+}
+
 /* Collections: paste an export or pick its file; it is checked here, and the main thread takes it in */
 static void col_page(Buf *b) {
   head(b, pt("Collections"));
@@ -525,7 +625,8 @@ static void handle(int fd) {
         rest = NULL;
     } else if (*rest && strcmp(rest, "/q") && strcmp(rest, "/tmdb") && strcmp(rest, "/tmdb/set") &&
                strcmp(rest, "/trakt") && strcmp(rest, "/trakt/set") && strcmp(rest, "/collections") &&
-               strcmp(rest, "/collections/set") && strcmp(rest, "/collections/clear"))
+               strcmp(rest, "/collections/set") && strcmp(rest, "/collections/clear") && strcmp(rest, "/camera") &&
+               strcmp(rest, "/camera/set"))
       rest = NULL;
   }
   if (!rest && !post && !strcmp(target, "/logs")) {
@@ -534,8 +635,13 @@ static void handle(int fd) {
       rest = "/logs";
     pthread_mutex_unlock(&mu);
   } /* the log has a plain address too: the token changes at every launch, and a test script must find it by itself */
-  if (!rest || post != (!strcmp(rest, "/collections/set") || !strcmp(rest, "/collections/clear"))) {
+  if (!rest || post != (!strcmp(rest, "/collections/set") || !strcmp(rest, "/collections/clear") ||
+                        !strcmp(rest, "/camera/set"))) {
     reply(fd, 404, NULL, NULL, 0);
+    return;
+  }
+  if (!strcmp(rest, "/camera/set")) {
+    camera_set(fd, req + bodyAt, got - bodyAt, want);
     return;
   }
   if (!strcmp(rest, "/collections/set")) {
@@ -593,6 +699,8 @@ static void handle(int fd) {
     trakt_page(&b);
   else if (!strcmp(rest, "/collections"))
     col_page(&b);
+  else if (!strcmp(rest, "/camera"))
+    camera_page(&b);
   else
     search_page(&b);
   pthread_mutex_unlock(&mu);

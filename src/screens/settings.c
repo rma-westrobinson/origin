@@ -2,6 +2,7 @@
    the end), the focused category's settings on a see-through panel beside them; one accent highlight glides from
    row to row; switches flip with OK, choices drill in (the settings slide out to the left, the choices come in
    from the right); the accent blobs drift behind (app.c, shared with Search); a key-hint bar at the bottom. */
+#include "core/brand.h"
 #include "screens/settings.h"
 #include "screens/board.h"
 #include "platform/plat.h"
@@ -35,8 +36,10 @@
 #include "screens/logcard.h"
 #include "screens/confirmcard.h"
 #include "screens/welcome.h"
+#include "screens/cameras.h"
+#include "screens/campip.h"
+#include <ctype.h>
 #include "ui/qr.h"
-#include "ui/support.h"
 #define SET_FOCUS RGB(0xd9, 0xd9, 0xd9)
 #define SET_FOCUS_TEXT RGB(0x14, 0x14, 0x14)
 #define SET_GROUP WHITE_A(128)
@@ -48,13 +51,10 @@
 #define SET_VALUE WHITE_A(153)
 #define SET_LOGOUT RGB(0xef, 0x8f, 0x8a)
 #define SET_LOGOUT_FOCUS RGB(0x72, 0x2a, 0x25)
-#define SUP_H 420.0f
 #define LOOK_H 156.0f
 #define LOOK_PICK_H (LOOK_H + 12.0f)
 #define KEYS_H 446.0f
 static int wnBtn; /* About: What's new, beside the update pill, has the focus (Up from the first row) */
-static Tween supK;
-static int supWant; /* the support row: which code shows (0 the coffee, 1 GitHub); OK turns it over */
 #include "ui/img.h"
 #include "core/usb.h"
 #include "core/recs.h"
@@ -130,10 +130,10 @@ static const Opt ACCENT_OPTS[] = { { "logo", "From the logo" },
                                    { "blue", "Blue" },
                                    { "indigo", "Indigo" },
                                    { "graphite", "Graphite" } };
-#define NCAT 11
+#define NCAT 12
 #define MAXROWS 48
 static Setting recsS[12];
-static Setting playBase[8], playS[8], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
+static Setting camS[CAM_MAX + 3], playBase[9], playS[9], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
     profS[4];
 static Opt subProviderOpts[ADDONS_MAX + 1];
 static char subProviderKeys[ADDONS_MAX][SUBS_PROVIDER_KEY_SIZE], subProviderNames[ADDONS_MAX][96];
@@ -380,6 +380,40 @@ static int recs_opts(void) {
   return n;
 }
 static void recs_rows_again(void);
+/* Cameras: one row per camera (OK watches it, Right edits it), then the two ways to add one */
+static unsigned camSeen;
+static int cams_opts(void) {
+  int n = 0;
+  Camera c;
+  camSeen = cam_generation();
+  for (int i = 0; i < CAM_MAX && cam_get(i, &c); i++) {
+    char k[24], shown[240];
+    snprintf(k, sizeof k, "__cam%d", i);
+    cam_shown(&c, shown, sizeof shown);
+    Setting *s = &camS[n++];
+    set_act(s, k, c.name, "");
+    snprintf(s->ds, sizeof s->ds, "%s  \xc2\xb7  %s", shown,
+             campip_available() ? T("OK to watch, Right to edit, Play to float in the corner")
+                                : T("OK to watch, Right to edit"));
+    s->raw = 1; /* (the camera's own words: not translated) */
+  }
+  set_act(&camS[n++], "__camPhone", "Add a camera from your phone",
+          "Scan a code, then type the stream address and the camera account on your phone");
+  set_act(&camS[n++], "__camTv", "Add a camera on the TV", "Type the camera's address with the remote");
+  if (campip_available() && n > 2)
+    set_act(&camS[n++], "__camPip", campip_active() ? "Close the camera in the corner" : "Float a camera in the corner",
+            "Shows the last camera you watched in a small window while you browse or watch a film");
+  return n;
+}
+static void cams_rows_again(void) {
+  for (int i = 0; i < ncat; i++)
+    if (cats[i].opts == camS) {
+      cats[i].n = cams_opts();
+      if (S.cat == i && S.idx >= cats[i].n)
+        S.idx = cats[i].n - 1;
+    }
+  S.dirty = 1;
+}
 static int keys_opts(void) {
   int n = 0;
   tmdbOn = tmdb_has_key();
@@ -513,9 +547,6 @@ static int about_opts(void) {
     s->raw = 1;
   }
   set_act(&supS[n++], "__logs", "Share logs", "Share the code and describe the issue");
-  if (welcome_support_url()[0])
-    set_act(&supS[n++], "__support", "Support the project",
-            "A coffee keeps it going. A star helps others find it"); /* its codes in view (sized as if last) */
   set_s(&supS[n++], "nerdStats", "Stats for nerds", "Memory, storage and frame times in a corner of the screen", OO, 2,
         "false"); /* under it: the list scrolls to it */
   {
@@ -553,6 +584,7 @@ static void play_layout(void) {
   playS[n++] = playBase[4]; /* the best stream first */
   for (int i = 0; i < 4; i++)
     playS[n++] = playBase[i];
+  playS[n++] = playBase[8];
   if (on)
     playS[n++] = playBase[6];
   const TvCaps *tc = best_caps();
@@ -604,6 +636,8 @@ static void build(void) {
   set_s(&playBase[3], "bgTrailer", "Background trailers", "A trailer plays in the focused card after a few seconds", OO,
         2, "true");
   set_s(&playBase[4], "autoBest", "Play the best stream automatically", "", OO, 2, "false");
+  set_s(&playBase[8], "pipBack", "Keep the film in a corner",
+        "Back leaves the film playing in a small window while you look for something else", OO, 2, "true");
   set_s(&playBase[7], "dv7Convert", "Dolby Vision for Blu-ray copies",
         "Their picture is converted on this TV so it shows in Dolby Vision, not HDR10", OO, 2, "true");
   set_s(&playBase[6], "bgTrailerVol", "Volume", "The sound comes up softly to this level", SVOL, 10, "70");
@@ -614,7 +648,7 @@ static void build(void) {
         "Used for the default subtitle language when the file has no matching track", subProviderOpts, 1, "");
   subs_provider_opts();
   set_s(&subsS[2], "subsOpenSubtitles", "OpenSubtitles v3",
-        "Include Origin's built-in subtitle results and sync references", OO, 2, "true");
+        "Include the built-in subtitle results and sync references", OO, 2, "true");
   set_s(&subsS[3], "subtitleSize", "Size", "Also in the player, under Subtitles", SIZES, 7, "2");
   set_s(&subsS[4], "subsColor", "Colour", "", COLORS, 6, "#ffffff");
   set_s(&subsS[5], "subsOpacity", "Opacity", "Lower lets the picture show through the words", SUBOP, 6, "100");
@@ -664,7 +698,7 @@ static void build(void) {
     s->opts = s->dyn;
     s->nopts = n;
   }
-  int nl = lang_opts(), nk = keys_opts(), na = addon_opts(), nr = recs_opts();
+  int nl = lang_opts(), nk = keys_opts(), na = addon_opts(), nr = recs_opts(), ncam = cams_opts();
   set_act(&acctS[0], "__logout", "Log out", S.acct);
   acctS[0].raw = 1;
   int nprof = 0;
@@ -699,7 +733,8 @@ static void build(void) {
     { "Account and system", "Account", "set_acct", "Stremio or Nuvio, and your profiles", NULL, profS, nprof, 0 },
     { "Account and system", "Addons", "set_addon", "", NULL, addonS, na, 0 },
     { "Account and system", "Keys", "set_keys", "Titles in your language, ratings and reviews", "keys", keyS, nk, 0 },
-    { "Account and system", "About", "info", "Version, updates, logs and support", "about", supS, nab, 0 },
+    { "Account and system", "Cameras", "set_cam", "Watch your security cameras here", NULL, camS, ncam, 0 },
+    { "Account and system", "About", "info", "Version, updates and logs", "about", supS, nab, 0 },
     { "", "Log out", "set_out", "", NULL, acctS, 1, 1 }
   };
   ncat = 0;
@@ -1152,13 +1187,6 @@ static void layout(void) {
     float h = 16 + 34 + (nl ? 4 + nl * DS_LH : 0) + 16;
     if (h < 68)
       h = 68;
-    if (!strcmp(o->k, "__support")) {
-      h = CLH - 8 - y;
-      if (h > SUP_H)
-        h = SUP_H;
-      if (h < 200)
-        h = 200;
-    } /* the support row: the panel's room left, so its codes are in view (a row after it is reached by scrolling) */
     S.optY[i] = y;
     S.optH[i] = h;
     y += h + ROWGAP;
@@ -1389,6 +1417,13 @@ static int key(int k) {
     wnBtn = 1;
     return 1;
   } /* up from About's first row: What's new */
+  if ((k == K_PLAYPAUSE || k == K_PLAY) && op && !strncmp(op->k, "__cam", 5) && isdigit((unsigned char)op->k[5])) {
+    Camera c; /* Play on a camera: it floats in the corner (the one picked) */
+    if (cam_get(atoi(op->k + 5), &c))
+      campip_open(&c);
+    cams_rows_again();
+    return 1;
+  }
   if (op && op->off && (k == K_OK || k == K_RIGHT)) {
     nudge_start(&S.nudge, k);
     return 1;
@@ -1418,6 +1453,9 @@ static int key(int k) {
       S.zone = 0;
     else
       nudge_start(&S.nudge, k);
+  } else if (k == K_RIGHT && op && !strncmp(op->k, "__cam", 5) && isdigit((unsigned char)op->k[5])) {
+    cameras_edit(atoi(op->k + 5));
+    return 1;
   } else if (k == K_RIGHT && op && op->action)
     nudge_start(&S.nudge, k);
   else if ((k == K_LEFT || k == K_RIGHT) && op && !op->action &&
@@ -1489,6 +1527,19 @@ static int key(int k) {
         settings_open_keys();
         return 1;
       }
+      if (!strncmp(op->k, "__cam", 5)) {
+        Camera c;
+        if (!strcmp(op->k, "__camPip")) {
+          campip_toggle();
+          cams_rows_again(); /* (its row says close now, or float) */
+        } else if (!strcmp(op->k, "__camPhone"))
+          cameras_add_phone();
+        else if (!strcmp(op->k, "__camTv"))
+          cameras_edit(-1);
+        else if (cam_get(atoi(op->k + 5), &c))
+          cameras_view(&c);
+        return 1;
+      }
       if (!strcmp(op->k, "__acctswitch"))
         acct_swap();
       else if (!strcmp(op->k, "__acctadd"))
@@ -1501,12 +1552,7 @@ static int key(int k) {
         logcard_show();
       else if (!strcmp(op->k, "__guide"))
         welcome_show_guide();
-      else if (!strcmp(op->k, "__support")) {
-        if (welcome_github_url()[0]) {
-          supWant = !supWant;
-          tween_to(&supK, (float)supWant, 0.5f, EASE_IN_OUT);
-        }
-      } /* the other code, turned over */ else if (!strcmp(op->k, "__upd"))
+      else if (!strcmp(op->k, "__upd"))
         update_install();
       else if (!strcmp(op->k, "__check"))
         update_check(1);
@@ -1548,6 +1594,9 @@ static void tick(float dt) {
     play_layout();
     S.dirty = 1;
   } /* a drive came or went, or its switch moved */
+  cam_poll(); /* a camera the phone saved while the page was open */
+  if (cam_generation() != camSeen)
+    cams_rows_again();
   if (update_serial() != aboutSeen) {
     for (int i = 0; i < ncat; i++)
       if (cats[i].opts == supS) {
@@ -1941,7 +1990,7 @@ static void preview_about(float x, float y, float w) {
                                          : T("Up to date");
   float sh = 16 + text_line_height(26), bh = text_line_height(46) + 4 + text_line_height(28) + 14 + sh, hd = about_hd(),
         ty = y + 28 + hd / 2 - bh / 2, tx = rtl ? ix - 30 : ix + AB_ICO + 30;
-  text_draw("Origin", tx, ty, 46, 800, WHITE_A(255), -0.8f, 0, al);
+  text_draw(APP_NAME, tx, ty, 46, 800, WHITE_A(255), -0.8f, 0, al);
   ty += text_line_height(46) + 4;
   text_draw(T1("Version {v}", "v", update_current()[0] ? update_current() : "…"), tx, ty, 28, 500, WHITE_A(200), 0, 0,
             al);
@@ -2071,38 +2120,7 @@ static void edge_fades(float x, float y, float w, float h, int top, int bottom) 
   if (bottom)
     gfx_rrect_v(x, y + h - 72, w, 72, 0, RGBA(21, 19, 28, 0), RGBA(21, 19, 28, 170));
 }
-/* the support row: its words on the start side, larger, and the code to scan on a white tile on the other, always
-   there (OK shows it bigger, on a card) */
-static void draw_support(const Setting *o, float x, float y, float h, int f, float nx, float ny) {
-  int rtl = app_rtl(), al = rtl ? ALIGN_RIGHT : ALIGN_LEFT;
-  const char *gh = welcome_github_url();
-  tween_tick(&supK, app_dt());
-  float Q = (h - 48 - 56 - 10) / 1.06f;
-  if (Q > 280)
-    Q = 280; /* (no address under it here) */
-  float PW = support_w(Q);
-  float qx = rtl ? x + 24 : x + CLW - 24 - PW, qy = y + 24, tw = CLW - 48 - PW - 40, L = rtl ? x + CLW - 24 : x + 24;
-  x += nx;
-  y += ny;
-  qx += nx;
-  qy += ny;
-  L += nx;
-  float hd = text_line_height(30) + 10 + 3 * DS_LH + (gh[0] ? 16 + 40 : 0), ty = y + h / 2 - hd / 2;
-  icon_draw("g_heart", rtl ? L - 30 : L, ty + 2, 30, f ? ACC_FG : ACC2);
-  text_draw(T(o->lb), rtl ? L - 42 : L + 42, ty, 30, 800, f ? ACC_FG : WHITE_A(255), -0.4f, tw - 42, al);
-  int nl = text_draw_wrapped(T(o->ds), L, ty + text_line_height(30) + 10, tw, 3, DS_PX, 500,
-                             f ? col_alpha(ACC_FG, 0.9f) : WHITE_A(210), 0, al, DS_LH);
-  if (gh[0])
-    key_hint(L, ty + text_line_height(30) + 10 + nl * DS_LH + 16 + 20, K_OK,
-             supWant ? T("Buy me a coffee") : T("Star on GitHub"), f ? ACC_FG : WHITE_A(200), rtl);
-  support_glass(0);
-  support_draw(qx, qy, Q, gh[0] ? supK.v : 0, f, welcome_support_url(), NULL, gh, NULL);
-}
 static void draw_row(const Setting *o, int i, float x, float y, float h, int f, float nx, float ny) {
-  if (!strcmp(o->k, "__support")) {
-    draw_support(o, x, y, h, f, nx, ny);
-    return;
-  }
   int rtl = app_rtl(), al = rtl ? ALIGN_RIGHT : ALIGN_LEFT, ar = rtl ? ALIGN_LEFT : ALIGN_RIGHT;
   RowA *r = &S.ra[i];
   float L = rtl ? x + CLW - 24 : x + 24, R = rtl ? x + 24 : x + CLW - 24;

@@ -26,6 +26,10 @@ mkdir -p "$G/app/build"; cp -r "$AB/deps/sdl-java" "$G/app/build/sdl-java"
 for ABI in $ABIS; do J="$G/app/src/main/jniLibs/$ABI"; mkdir -p "$J"; cp "$BA/out/$ABI"/{libmain.so,libSDL2.so,libcurl.so} "$J/"
   [ -f "$BA/out/$ABI/libsbengine.so" ] && cp "$BA/out/$ABI/libsbengine.so" "$J/"; done
 A="$G/app/src/main/assets/app"; mkdir -p "$A"; cp -r "$ROOT/assets" "$A/assets"; cp "$APPINFO" "$A/appinfo.json"
+# the app's name (src/core/brand.h, the one place) for the launcher label and the Java side's texts
+APP_NAME="$(sed -n 's/^#define APP_NAME "\(.*\)"$/\1/p' "$ROOT/src/core/brand.h")"; [ -n "$APP_NAME" ] || { echo "no APP_NAME in src/core/brand.h"; exit 1; }
+mkdir -p "$G/app/src/main/res/values"
+printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="app_name">%s</string></resources>\n' "$APP_NAME" > "$G/app/src/main/res/values/strings.xml"
 # the launcher icon and the TV banner, drawn from the webOS icons
 python3 - "$ROOT" "$G/app/src/main/res" <<'PY'
 import sys, os

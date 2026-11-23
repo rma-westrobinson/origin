@@ -159,9 +159,6 @@ Reports are welcome, with your device and system version: [Issues](https://githu
 ## Building
 One codebase serves every platform, and everything builds in Linux or WSL. `tools/release.sh build X.Y.Z` makes every package. See [Building](docs/building.md) for each platform, the tests and the code style.
 
-## Support
-- [ko-fi.com/blueee123](https://ko-fi.com/blueee123)
-
 ## Credits
 - Origin began as Better Stremio, a fork of [Stremio Origin](https://github.com/stremio-origin/webos) (GPL-3.0).
 - This product uses the TMDB API but is not endorsed or certified by TMDB.

@@ -95,7 +95,9 @@ static void load_at(const char *url, double startSec) {
   seenGen = ~0u;
   if (pauseWanted)
     call_v(mPause, "pause"); /* the Java load is asynchronous; preserve a pause that arrived during it */
-  fprintf(stderr, "[video] load %.200s%s\n", url, startSec > 0 ? " (timed)" : "");
+  /* a camera's address carries its account: the log is shared, so it never shows more than the scheme */
+  fprintf(stderr, "[video] load %.200s%s\n", !strncmp(url, "rtsp://", 7) ? "rtsp://(camera)" : url,
+          startSec > 0 ? " (timed)" : "");
 }
 void video_load(const char *url) {
   pauseWanted = 0;

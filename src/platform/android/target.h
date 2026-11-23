@@ -13,6 +13,7 @@
 #endif
 #define SB_DL_SUFFIX ".so"
 #define SB_HAS_USB 0
+#define SB_CAMVID 1 /* a second player for a camera in the corner (core/camvid.h, SbCam.java) */
 #define SB_HAS_CAST 1
 #define SB_HAS_DTS 0
 #define SB_GL_ES 1
