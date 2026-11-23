@@ -241,7 +241,8 @@ static float kf(double at, float dur, const float *c, float delay) {
 }
 
 /* ---- state ---- */
-#define MAXBTN 8
+#define MAXBTN 10 /* (was 8: a series episode with a next episode already fills 8, and the camera button is a 9th;
+                     the 9th wrote past btns[] and took the app down on playback start) */
 #define MAXROW 64
 typedef struct {
   int k; /* 0 note 1 skel 2 ep 3 src 4 chip; ls: a subtitle row's list, 1 OpenSubtitles 2 the addons' */
@@ -2724,6 +2725,8 @@ static void build_btns(void) {
   int i = 0;
 #define B(ID, IC, LB, BIG)                \
   do {                                    \
+    if (i >= MAXBTN)                      \
+      break; /* no room: the button is dropped, never written past btns[] */ \
     P.btns[i].id = ID;                    \
     P.btns[i].icon = IC;                  \
     snprintf(P.btns[i].lb, 48, "%s", LB); \
