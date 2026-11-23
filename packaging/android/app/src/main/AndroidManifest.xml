@@ -15,7 +15,11 @@
     <permission android:name="tv.stremioorigin.app.permission.EXPORT" android:protectionLevel="signature" />
     <uses-permission android:name="tv.stremioorigin.app.permission.EXPORT" />
     <!-- (Android 11+ hides other packages: the first run reads the old app and offers to remove it) -->
-    <queries><package android:name="tv.stremioorigin.app" /></queries>
+    <queries>
+        <package android:name="tv.stremioorigin.app" />
+        <!-- (and a speech recognizer for voice search: Android 11+ hides the apps that would answer this) -->
+        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>
+    </queries>
 
     <!-- one APK for TVs and phones: neither a remote nor a touch screen is required -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

@@ -608,7 +608,7 @@ static void search_page(float a, int typed, float res, float qrRing) {
             col_alpha(ACC2 | 0xff000000u, 0.6f + 0.4f * cosf((float)app_now() * 5)));
   static const char *K = SEARCH_KEYS;
   int hot = typed > 0 && typed <= 4 ? (int)(strchr(K, WORD[typed - 1]) - K) : -1; /* the same keyboard as Search's */
-  for (int i = 0; i < SEARCH_NK + 3; i++) {
+  for (int i = 0; i < SEARCH_NK + search_key_row_len(SEARCH_KROWS); i++) {
     float x, y, w;
     search_key_pos(i, &x, &y, &w);
     x += qx;
@@ -619,7 +619,9 @@ static void search_page(float a, int typed, float res, float qrRing) {
       char s[2] = { (char)(K[i] >= 'a' ? K[i] - 32 : K[i]), 0 };
       text_draw(s, x + w / 2, y + (66 - text_line_height(28)) / 2, 28, 700, f ? ACC_FG : WHITE_A(219), 0, 0,
                 ALIGN_CENTER);
-    } else if (i == SEARCH_NK + 1)
+    } else if (i == SEARCH_NK + 3)
+      icon_draw("mic", x + w / 2 - 15, y + 18, 30, WHITE_A(219));
+    else if (i == SEARCH_NK + 1)
       icon_draw("backspace", x + w / 2 - 15, y + 18, 30, WHITE_A(219));
     else
       text_draw(T(i == SEARCH_NK ? "Space" : "Clear"), x + w / 2, y + (66 - text_line_height(24)) / 2, 24, 700,

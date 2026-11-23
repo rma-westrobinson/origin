@@ -4866,6 +4866,23 @@ static void ss_exit(void) {
   P.lastAct = now_();
 }
 static void try_next(void);
+/* A stream that never started playing: tried once more with the next best one, by itself, up to AUTO_NEXT_MAX
+   times (best_skip() keeps each failed address out of the next choice, so none is tried twice). Only when the
+   list runs out is the error shown (on_best_done). Not for a trailer, a failure after the picture ran (that
+   would restart the film elsewhere) or the "other" type. autoN/autoErr live outside P: prepare() clears P. */
+#define AUTO_NEXT_MAX 10
+static int autoN;
+static char autoErr[300];
+static void fail_auto(const char *t) {
+  int ran = P.live || P.lastPos > 5; /* (fail() clears live) */
+  fail(t);
+  if (!P.canNext || ran || autoN >= AUTO_NEXT_MAX)
+    return;
+  autoN++;
+  snprintf(autoErr, sizeof autoErr, "%s", t);
+  fprintf(stderr, "[player] auto-advance %d/%d after: %s\n", autoN, AUTO_NEXT_MAX, t);
+  try_next();
+}
 void player_key(int k, int down) {
   if (!down || !P.open)
     return;
@@ -5493,7 +5510,7 @@ static void on_p2p(void *ud, const char *url, const char *err, uint64_t size) {
     return;
   P.resolving = 0;
   if (!url) {
-    fail(err ? err : T("No peers found for this P2P stream"));
+    fail_auto(err ? err : T("No peers found for this P2P stream"));
     return;
   }
   snprintf(P.url, sizeof P.url, "%s", url);
@@ -5587,7 +5604,12 @@ static void on_best_done(const Stream *s, const BestRate *r, void *ud) {
     return;
   bestTok = 0;
   if (!s) {
-    fail(T("No stream suits this TV. Pick one from the list"));
+    if (autoN) { /* the list ran out after streams failed: the last error, not a pick message */
+      char e[400];
+      snprintf(e, sizeof e, "%s  ·  %s", autoErr, T("no other stream to try"));
+      fail(e);
+    } else
+      fail(T("No stream suits this TV. Pick one from the list"));
     return;
   }
   fprintf(stderr, "[best] %s\n", r ? r->sum : "");
@@ -5709,6 +5731,7 @@ static void try_next(void) {
       best_choose(P.type, P.vid, best_dur(P.meta, P.type), on_best_status, on_best_done, (void *)(uintptr_t)bestSess);
 }
 void player_choose_best(const char *type, const char *id, const char *vid) {
+  autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
   open_title(type, id);
   prepare(vid, 0, 0);
   set_status(T("Choosing the best stream"));
@@ -5716,6 +5739,7 @@ void player_choose_best(const char *type, const char *id, const char *vid) {
   bestTok = best_choose(type, P.vid, best_dur(P.meta, type), on_best_status, on_best_done, (void *)(uintptr_t)bestSess);
 }
 void player_play(const Stream *s, const char *type, const char *id, const char *vid, int fromStart) {
+  autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
   open_title(type, id);
   play_stream(s, vid, fromStart ? -1 : 0);
 }
@@ -5741,6 +5765,7 @@ void player_next_art(const char *name, const char *poster, const char *bg, const
   snprintf(artLogo, sizeof artLogo, "%s", logo ? logo : "");
 }
 void player_play_at(const Stream *s, const char *type, const char *id, const char *vid, double pos) {
+  autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
   open_title(type, id);
   play_stream(s, vid, pos > 0 ? pos : 0);
 }
@@ -6534,7 +6559,7 @@ void player_tick(float dt) {
       if (!P.errAt)
         P.errAt = now_();
       if (!P.sizeTok || P.sizeAns || now_() - P.errAt > 4)
-        fail(fail_reason());
+        fail_auto(fail_reason());
     }
   } /* the first URL failed: the same file the other way; the reason waits for the server's answer (4 s at most) */
   if (P.nx.tok && !P.nx.done && now_() >= P.nx.until)

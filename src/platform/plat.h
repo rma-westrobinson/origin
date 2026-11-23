@@ -64,6 +64,13 @@ void plat_immersive(int on);
 void plat_haptic(void);
 void plat_safe_area(int *top, int *bottom, int *left, int *right);
 int plat_open_url(const char *url);
+/* voice search (Android: the system's speech recognizer through MainActivity; 0 / no-ops elsewhere):
+   whether a recognizer is installed, open it (1 started), and the answer, once, from the main loop:
+   1 = text copied to out, -1 = cancelled or nothing heard, 2 = the remote's mic key was pressed (nothing in out),
+   0 = still listening or never asked */
+int plat_voice_available(void);
+int plat_voice_start(void);
+int plat_voice_poll(char *out, int cap);
 /* the window's brightness and the system's media volume, for a phone's swipes on the film (0-100; stubs elsewhere) */
 int plat_brightness_get(void); /* this window's brightness 0-100; when it follows the system, the system's level (0-100); -1 unknown/unsupported */
 int plat_brightness_set(int pct); /* 0-100 for this window; -1 = follow the system again; returns 1 done, 0 unsupported */

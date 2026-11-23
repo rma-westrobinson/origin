@@ -93,8 +93,8 @@ static int slowlog(void) {
 static const int KROW0[SEARCH_KROWS + 1] = { 0, 10, 20, 29, 36 };
 static const float KOFF[SEARCH_KROWS] = { 0, 0, 0.5f, 1.0f };
 int search_key_row_len(int r) {
-  return r < SEARCH_KROWS ? KROW0[r + 1] - KROW0[r] : 3;
-}
+  return r < SEARCH_KROWS ? KROW0[r + 1] - KROW0[r] : 3 + plat_voice_available();
+} /* (the last row: Space, Backspace, Clear, and a microphone where the system has a speech recognizer) */
 int search_key_index(int r, int c) {
   return r < SEARCH_KROWS ? KROW0[r] + c : NK + c;
 }
@@ -117,10 +117,11 @@ void search_key_pos(int ki, float *x, float *y, float *w) {
     *x = (KOFF[r] + c) * SEARCH_KPITCH;
     *w = SEARCH_KW;
   } else {
-    float bw = (9 * SEARCH_KPITCH + SEARCH_KW - 2 * 8) / 3;
+    int nk = search_key_row_len(SEARCH_KROWS);
+    float bw = (9 * SEARCH_KPITCH + SEARCH_KW - (nk - 1) * 8) / nk;
     *x = c * (bw + 8);
     *w = bw;
-  } /* Space, Backspace, Clear: a third each */
+  } /* Space, Backspace, Clear (and the microphone): an equal share each */
   *y = r * SEARCH_KROWH;
 }
 static int rows_of(void) {
@@ -300,6 +301,40 @@ static void set_q(const char *q) {
   S.livePending = 1;
   S.catPending = 0;
 } /* (live() asks for the catalogs again) */
+/* ---- voice search: the system's speech recognizer answers with text, which becomes the query as if typed ---- */
+static int voiceOn; /* the recognizer is open */
+static void voice_ask(void) {
+  if (voiceOn)
+    return;
+  if (plat_voice_start())
+    voiceOn = 1;
+  else
+    toast(T("Voice search isn’t available on this device"), 2500, NULL);
+}
+static void voice_tick(void) {
+  char t[200];
+  int r = plat_voice_poll(t, sizeof t);
+  if (r == 2) { /* the remote's microphone key */
+    voice_ask();
+    return;
+  }
+  if (!r)
+    return;
+  voiceOn = 0;
+  if (r < 0)
+    return; /* cancelled, or nothing heard */
+  size_t n = strlen(t); /* at most 40 bytes, not through the middle of a character */
+  if (n > 40) {
+    n = 40;
+    while (n && ((unsigned char)t[n] & 0xc0) == 0x80)
+      n--;
+    t[n] = 0;
+  }
+  fprintf(stderr, "[search] voice: \"%s\"\n", t);
+  set_q(t);
+  S.zone = 0;
+  search_now(); /* spoken, so no pause for more letters: asked at once */
+}
 static void type_key(int ki) {
   char q[64];
   snprintf(q, sizeof q, "%s", S.q);
@@ -325,6 +360,10 @@ static void type_key(int ki) {
   } /* backspace */
   else if (ki == NK + 2)
     q[0] = 0; /* clear */
+  else if (ki == NK + 3) {
+    voice_ask(); /* the microphone: the query is spoken; what is typed so far stays until the answer comes */
+    return;
+  }
   set_q(q);
 }
 /* a keyboard: typed text goes straight into the query, Backspace ("\b") takes off a character; Enter after typing goes
@@ -888,6 +927,7 @@ static void tick(float dt) {
     cat_go();
   }
   phone_tick();
+  voice_tick();
   int act = !topNav.active;
   float x, y, w;
   key_rect(key_at(S.kr, S.kc), &x, &y, &w);
@@ -977,7 +1017,7 @@ static void draw(void) {
     gfx_rrect(cx, qy + 20, 3, 36, 1.5f, col_alpha(ACC2 | 0xff000000u, ca));
   }
   /* the keyboard: the accent block slides under the focused key */
-  for (int i = 0; i < NK + 3; i++) {
+  for (int i = 0; i < NK + search_key_row_len(SEARCH_KROWS); i++) {
     float x, y, w;
     key_rect(i, &x, &y, &w);
     hit_add(x, y, w, 66, key_focus, NULL, i, 0);
@@ -988,7 +1028,7 @@ static void draw(void) {
     gfx_rrect(S.kfx.v, S.kfy.v, S.kfw.v, 66, 14, ACC);
     gfx_offset_pop();
   }
-  for (int i = 0; i < NK + 3; i++) {
+  for (int i = 0; i < NK + search_key_row_len(SEARCH_KROWS); i++) {
     float x, y, w;
     key_rect(i, &x, &y, &w);
     int f = act && S.zone == 0 && key_at(S.kr, S.kc) == i;
@@ -1003,6 +1043,8 @@ static void draw(void) {
     else if (i == NK)
       text_draw(T("Space"), x + w / 2 + nx, y + (66 - text_line_height(24)) / 2 + ny, 24, 700, fg, 0.4f, w - 16,
                 ALIGN_CENTER);
+    else if (i == NK + 3)
+      icon_draw("mic", x + w / 2 - 15 + nx, y + 18 + ny, 30, fg);
     else
       icon_draw("backspace", x + w / 2 - 15 + nx, y + 18 + ny, 30, fg);
   }

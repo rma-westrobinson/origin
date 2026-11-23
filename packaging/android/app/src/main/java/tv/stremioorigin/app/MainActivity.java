@@ -275,6 +275,46 @@ public class MainActivity extends SDLActivity {
         if (e.getActionMasked() == android.view.MotionEvent.ACTION_CANCEL) nativeTouchCancel();
         return super.dispatchTouchEvent(e);
     }
+    /* voice search: the system's speech recognizer (RecognizerIntent, the Google app on a Google TV) opens over the app,
+       listens, and hands back the best guess. That activity holds the microphone, so Origin needs no RECORD_AUDIO
+       permission. The answer waits in voiceAns for the C side's poll: "" nothing yet, "=text" heard, "-" cancelled */
+    static final int REQ_VOICE = 7421;
+    static volatile String voiceAns = "";
+    static Intent voiceIntent() {
+        Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH);
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search Origin");
+        return i;
+    }
+    public static boolean uiVoiceAvailable() {
+        final MainActivity a = self; if (a == null) return false;
+        return voiceIntent().resolveActivity(a.getPackageManager()) != null;
+    }
+    public static boolean uiVoiceStart() {
+        final MainActivity a = self; if (a == null) return false;
+        voiceAns = "";
+        a.runOnUiThread(() -> {
+            try { a.startActivityForResult(voiceIntent(), REQ_VOICE); }
+            catch (Exception e) { Log.w(TAG, "voice search", e); voiceAns = "-"; }
+        });
+        return true;
+    }
+    static volatile long voiceKeyAt;
+    public static String uiVoicePoll() {
+        String r = voiceAns;
+        if (!r.isEmpty()) { voiceAns = ""; return r; }
+        long t = voiceKeyAt;
+        if (t == 0) return "";
+        voiceKeyAt = 0;
+        return android.os.SystemClock.uptimeMillis() - t < 1500 ? ":" : ""; /* ":" the mic key was pressed just now */
+    }
+    @Override protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req != REQ_VOICE) return;
+        java.util.ArrayList<String> r = res == RESULT_OK && data != null ? data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS) : null;
+        voiceAns = r != null && !r.isEmpty() && r.get(0) != null && !r.get(0).trim().isEmpty() ? "=" + r.get(0).trim() : "-";
+    }
     public static boolean uiOpenUrl(String url) {
         final MainActivity a = self; if (a == null) return false;
         try { Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); a.startActivity(i); return true; }
@@ -295,6 +335,11 @@ public class MainActivity extends SDLActivity {
        keyboard's, so a remote that calls itself a gamepad still sends keys and not joystick buttons */
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode(), m = k;
+        /* the remote's microphone key, where the system hands it to the app (many Google TV builds keep it for the
+           Assistant): noted for the C side, which opens voice search only while Search is up */
+        if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0
+            && (k == KeyEvent.KEYCODE_SEARCH || k == KeyEvent.KEYCODE_VOICE_ASSIST || k == KeyEvent.KEYCODE_ASSIST))
+            voiceKeyAt = android.os.SystemClock.uptimeMillis();
         switch (k) {
             case KeyEvent.KEYCODE_PROG_RED: m = KeyEvent.KEYCODE_F1; break;
             case KeyEvent.KEYCODE_PROG_GREEN: m = KeyEvent.KEYCODE_F2; break;

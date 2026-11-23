@@ -394,6 +394,9 @@ void plat_safe_area(int *top, int *bottom, int *left, int *right) {
   *top = *bottom = *left = *right = 0;
 }
 /* a link in the default browser (the update's DMG, a support page) */
+int plat_voice_available(void) { return 0; }
+int plat_voice_start(void) { return 0; }
+int plat_voice_poll(char *out, int cap) { (void)out; (void)cap; return 0; }
 int plat_open_url(const char *url) {
   if (strncmp(url, "https://", 8))
     return 0;

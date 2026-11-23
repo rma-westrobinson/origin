@@ -192,6 +192,9 @@ void plat_gesture_insets(int *left, int *top, int *right, int *bottom) {
 unsigned plat_touch_cancel_event(void) {
   return 0;
 }
+int plat_voice_available(void) { return 0; }
+int plat_voice_start(void) { return 0; }
+int plat_voice_poll(char *out, int cap) { (void)out; (void)cap; return 0; }
 int plat_open_url(const char *url) {
   fprintf(stderr, "[form] open %s\n", url);
   return 1;

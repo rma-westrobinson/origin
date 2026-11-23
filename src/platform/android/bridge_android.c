@@ -73,6 +73,7 @@ int plat_install_poll(char *msg, int cap) {
 
 /* ---- phones and tablets: MainActivity's ui* methods (each hops to the UI thread itself) ---- */
 static jclass act;
+static jmethodID mVAv, mVGo, mVPl;
 static jmethodID mOri, mImm, mHap, mSafe, mOpen, mBrG, mBrS, mVoG, mVoS, mGest;
 static SDL_atomic_t touchCancelEv; /* the event type, registered once on the app thread (0 not yet, -1 none to be had);
                                       SDL_PushEvent is thread-safe */
@@ -98,7 +99,10 @@ static int act_ready(JNIEnv *e) {
   mVoG = (*e)->GetStaticMethodID(e, act, "uiVolumeGet", "()I");
   mVoS = (*e)->GetStaticMethodID(e, act, "uiVolumeSet", "(I)I");
   mGest = (*e)->GetStaticMethodID(e, act, "uiGestureInsets", "()Ljava/lang/String;");
-  if (!mOri || !mImm || !mHap || !mSafe || !mOpen || !mBrG || !mBrS || !mVoG || !mVoS || !mGest) {
+  mVAv = (*e)->GetStaticMethodID(e, act, "uiVoiceAvailable", "()Z");
+  mVGo = (*e)->GetStaticMethodID(e, act, "uiVoiceStart", "()Z");
+  mVPl = (*e)->GetStaticMethodID(e, act, "uiVoicePoll", "()Ljava/lang/String;");
+  if (!mVAv || !mVGo || !mVPl || !mOri || !mImm || !mHap || !mSafe || !mOpen || !mBrG || !mBrS || !mVoG || !mVoS || !mGest) {
     (*e)->ExceptionClear(e);
     (*e)->DeleteGlobalRef(e, act);
     act = NULL;
@@ -113,6 +117,54 @@ static void call_int(jmethodID m, int v) {
   (*e)->CallStaticVoidMethod(e, act, m, (jint)v);
   if ((*e)->ExceptionCheck(e))
     (*e)->ExceptionClear(e);
+}
+/* voice search: MainActivity opens the system's speech recognizer (RecognizerIntent) and keeps its answer for
+   uiVoicePoll(): "" while nothing is back, "=text" for what was heard, "-" for a cancel or nothing heard */
+static int voice_bool(jmethodID *m) {
+  JNIEnv *e = env();
+  if (!act_ready(e))
+    return 0;
+  jboolean ok = (*e)->CallStaticBooleanMethod(e, act, *m);
+  if ((*e)->ExceptionCheck(e)) {
+    (*e)->ExceptionClear(e);
+    ok = 0;
+  }
+  return ok != 0;
+}
+int plat_voice_available(void) {
+  static int v = -1;
+  if (v < 0)
+    v = voice_bool(&mVAv);
+  return v;
+}
+int plat_voice_start(void) {
+  return plat_voice_available() && voice_bool(&mVGo);
+}
+int plat_voice_poll(char *out, int cap) {
+  out[0] = 0;
+  JNIEnv *e = env();
+  if (!act_ready(e))
+    return 0;
+  jstring js = (jstring)(*e)->CallStaticObjectMethod(e, act, mVPl);
+  if ((*e)->ExceptionCheck(e)) {
+    (*e)->ExceptionClear(e);
+    return 0;
+  }
+  int r = 0;
+  const char *s = js ? (*e)->GetStringUTFChars(e, js, NULL) : NULL;
+  if (s) {
+    if (s[0] == '=') {
+      snprintf(out, (size_t)cap, "%s", s + 1);
+      r = out[0] ? 1 : -1;
+    } else if (s[0] == '-')
+      r = -1;
+    else if (s[0] == ':')
+      r = 2; /* the remote's mic key */
+    (*e)->ReleaseStringUTFChars(e, js, s);
+  }
+  if (js)
+    (*e)->DeleteLocalRef(e, js);
+  return r;
 }
 void plat_orientation(int landscape) {
   if (act_ready(env()))

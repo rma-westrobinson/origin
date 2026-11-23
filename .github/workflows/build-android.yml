@@ -1,0 +1,73 @@
+name: Build Android (armeabi-v7a)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # Versions come from the repo: NDK 27.2.12479018 and API 24 (tools/android/build-deps.sh, tools/build-engine.sh,
+      # tools/targets/android.sh), compileSdk 35 (packaging/android/app/build.gradle), build-tools 35.0.0
+      # (apksigner path in tools/android/build-apk.sh). JDK 17 is not stated as a requirement; it is the level the
+      # Gradle project compiles to (VERSION_17) and the minimum for AGP 8.7.2.
+      NDK_VERSION: 27.2.12479018
+      ABIS: armeabi-v7a                 # build only the 32-bit ARM ABI (scripts default to several)
+      AB: ${{ github.workspace }}/../abuild               # deps, Gradle, engine output (tools/paths.sh)
+      ORIGIN_BUILD: ${{ github.workspace }}/../origin-build   # engine sources/build, release key (tools/paths.sh)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake unzip xz-utils bzip2
+          python3 -m pip install --user pillow   # build-apk.sh draws the launcher icon with PIL
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''   # installed explicitly below
+
+      - name: Install Android SDK and NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${NDK_VERSION}"
+          echo "NDK=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Cache dependencies and engine
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.AB }}
+            ${{ env.ORIGIN_BUILD }}/engine
+          key: origin-android-armv7-${{ runner.os }}-${{ hashFiles('tools/android/build-deps.sh', 'tools/build-engine.sh', 'tools/engine/engine.patch') }}
+
+      - name: Build native dependencies (SDL2, Mbed TLS, curl)
+        run: tools/android/build-deps.sh
+
+      - name: Build P2P engine (armeabi-v7a)
+        # build-engine.sh writes to build/android/<abi>/ by default, but tools/targets/android.sh looks in $AB/engine/<abi>/
+        run: ENGINE_OUT="$AB/engine/armeabi-v7a/libsbengine.so" tools/build-engine.sh android-armeabi-v7a
+
+      - name: Build release APK
+        run: tools/android/build-apk.sh
+
+      - name: Locate APK
+        run: |
+          ls -l build/android/apk
+          test -n "$(ls build/android/apk/*_android-armv7.apk)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: origin-android-armv7
+          path: build/android/apk/*_android-armv7.apk
+          if-no-files-found: error
