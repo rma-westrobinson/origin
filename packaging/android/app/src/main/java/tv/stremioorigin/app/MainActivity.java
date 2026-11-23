@@ -131,9 +131,55 @@ public class MainActivity extends SDLActivity {
 
     /* a phone sent to the back (Home, another app, the screen off): whatever plays stops at once, the film or a card's
        preview (the app's own loop sleeps while it is away, so it is done here) */
-    @Override protected void onPause() { super.onPause(); if (touch) SbPlayer.pause(); }
-    @Override protected void onStop() { super.onStop(); if (touch) SbPlayer.pause(); }
+    /* ...except in the system's picture-in-picture window (below), where the film keeps playing */
+    @Override protected void onPause() {
+        super.onPause();
+        if (touch && !pipKeep()) SbPlayer.pause();
+        /* SDL paused the app's own loop with the activity: in the PiP window the loop must run on (it hides the controls
+           and lays out the small window), so SDL is told it is resumed again */
+        else if (touch) super.onResume();
+    }
+    /* (the PiP window closed with its X stops the activity too: the film is paused unless the window is still up) */
+    @Override protected void onStop() { super.onStop(); if (touch && !(pipKeep() && isInPictureInPictureMode())) SbPlayer.pause(); }
     @Override protected void onResume() { super.onResume(); SbUpdater.onResume(this); if (touch && film == 1) applyFilm(true); }
+
+    // ---- Android's own picture-in-picture (phones and tablets): the film floats over other apps ----
+    /* the C side arms it (app.c) while a film plays full screen: the picture's size, for the window's shape; 0 = not now */
+    static volatile int pipW, pipH;
+    static volatile boolean pipOn, pipEntering;
+    boolean pipCapable() {
+        return touch && Build.VERSION.SDK_INT >= 26 && getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
+            && !getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
+    }
+    /* the activity is leaving the screen for the PiP window (or is in it): keep the film playing */
+    static boolean pipKeep() { return pipOn || pipEntering; }
+    @SuppressWarnings("deprecation")
+    android.app.PictureInPictureParams pipParams() {
+        android.app.PictureInPictureParams.Builder b = new android.app.PictureInPictureParams.Builder();
+        int w = Math.max(pipW, 16), h = Math.max(pipH, 9);
+        double r = (double) w / h; r = Math.max(1 / 2.39, Math.min(2.39, r));   // the system accepts 1:2.39 to 2.39:1
+        b.setAspectRatio(new android.util.Rational((int) Math.round(r * 1000), 1000));
+        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(pipW > 0);
+        return b.build();
+    }
+    public static void uiPipArm(final int w, final int h) {
+        final MainActivity a = self; if (a == null || !a.pipCapable()) return;
+        pipW = w; pipH = h;
+        a.runOnUiThread(() -> { try { a.setPictureInPictureParams(a.pipParams()); } catch (Exception e) { Log.w(TAG, "pip params", e); } });
+    }
+    public static int uiPipActive() { return pipOn ? 1 : 0; }
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (!pipCapable() || pipW <= 0 || isInPictureInPictureMode()) return;
+        pipEntering = true;   // (onPause follows at once: the film must not be paused by it)
+        try { enterPictureInPictureMode(pipParams()); }
+        catch (Exception e) { pipEntering = false; Log.w(TAG, "enter pip", e); }
+    }
+    @Override public void onPictureInPictureModeChanged(boolean on, android.content.res.Configuration cfg) {
+        super.onPictureInPictureModeChanged(on, cfg);
+        pipOn = on; pipEntering = false;
+        if (!on && touch && film == 1) applyFilm(true);
+    }
 
     // ---- phones and tablets (src/platform/android/bridge_android.c calls these from the app's thread) ----
     static final int PAGE = 0xff0c0b11;   /* the app's page colour (app.h PAGE): the bars blend into it */

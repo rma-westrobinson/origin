@@ -2611,6 +2611,20 @@ static void board_tick(float dt) {
     b->recsVer = recs_version();
     board_rebuild(); /* (a tab's page just became ready, or changed: the rows swap in place, the focus row kept) */
   }
+  /* A film in the corner saves its progress (the library changes) while Home stays on screen: Home only rebuilt when
+     entered, so the title playing never rose to the front of Continue Watching until the film was closed. Rebuild in
+     a pause of the remote, and only when the order really differs. */
+  if (b->kind == 0 && b->libVer != lib_version() && player_mini() && app_idle() >= 0.7f) {
+    b->libVer = lib_version();
+    ItemList cw;
+    int n = lib_cw_items(&cw);
+    int same = b->n && !strcmp(b->rows[0].title, "Continue Watching") ? b->rows[0].items.n == n : n == 0;
+    for (int i = 0; same && i < n; i++)
+      same = !strcmp(b->rows[0].items.items[i].id, cw.items[i].id);
+    itemlist_clear(&cw);
+    if (!same)
+      board_rebuild();
+  }
   if ((b->kind == 0 || kindb(b)) && b->winRow != b->rowIdx)
     rows_window(b); /* (the focused row changed) */
   if (lay0(b)) { /* the focused row's details make room under it; the rows dock under the bar */

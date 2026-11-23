@@ -23,6 +23,10 @@ int player_mini(void); /* it plays in a small window in the corner while the app
 void player_mini_draw(void); /* once a frame after the page: the corner window cut out of it, a click opens the film */
 int player_mini_key(int k); /* a media key (play, pause, stop) for the corner's film; 1 when used */
 int player_mini_close(void); /* closes the corner's film; 1 when there was one */
+int player_mini_visible(void); /* it plays in the corner and its window shows (not hidden behind a camera in the corner) */
+void player_mini_hide(int hide); /* hides the corner's film (paused, silent, its window out of sight) or brings it back */
+void player_mini_expand(void); /* the corner's film full screen again (OK on the focused window) */
+void player_mini_rect(float *x, float *y, float *w, float *h); /* where its window is */
 int player_away(void); /* pause a stream for lifecycle away; never resumes it */
 int player_nerd_lines(char (*out)[120], int max); /* Stats for nerds: what plays and how */
 int player_art_full(void);
@@ -53,6 +57,8 @@ typedef struct {
 extern void (*player_chapters_hook)(const char *url, int p2p);
 void player_chapters(const char *url, const PlayerChapter *list, int n);
 int player_paused(void);
+/* the film that plays (for the watch party, core/party.h): its type, id, episode id and name; 0 when none is up */
+int player_now(char *type, char *id, char *vid, char *name, int cap);
 /* cast: the next play's subtitles as sent (n 0: none), a play at a moment (pos 0: where it was left), the phone's
    commands (1 pause, 2 resume, 3 seek to pos, 4 stop) and the state it is told (0 idle, 1 loading, 2 playing, 3 paused,
    4 ended, 5 error) */

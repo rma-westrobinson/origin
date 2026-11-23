@@ -1,6 +1,7 @@
 #include "core/touch.h"
 #include "core/app.h"
 #include "core/form.h"
+#include "core/party.h"
 #include "ui/gfx.h"
 #include "platform/plat.h"
 #include <SDL2/SDL.h>
@@ -174,6 +175,11 @@ static float rubber(float d, float extent) {
 #include "screens/player.h"
 unsigned touch_evt_ms;
 void touch_down(float x, float y) {
+  if (party_click(x, y)) {
+    memset(&F, 0, sizeof F);
+    F.caught = 1; /* the watch party's invite or menu took this tap */
+    return;
+  }
   if (player_open()) {
     memset(&F, 0, sizeof F);
     F.caught = 1;

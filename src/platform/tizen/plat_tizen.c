@@ -165,6 +165,13 @@ int plat_random(void *buf, int n) {
 
 void plat_orientation(int landscape) { (void)landscape; }
 void plat_immersive(int on) { (void)on; }
+void plat_pip_arm(int w, int h) {
+  (void)w;
+  (void)h;
+}
+int plat_pip_active(void) {
+  return 0;
+}
 void plat_haptic(void) {}
 void plat_safe_area(int *top, int *bottom, int *left, int *right) {
   *top = *bottom = *left = *right = 0;

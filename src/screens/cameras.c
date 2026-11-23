@@ -18,6 +18,7 @@
 #include "ui/text.h"
 #include "ui/widgets.h"
 #include <math.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -264,8 +265,17 @@ static struct {
   double at, liveAt, hintAt;
   char name[48], url[360], err[300];
   Screen *under;
+  double soundAt; /* the sound level was changed: its chip shows */
 } V;
 static Screen viewScr;
+static int viewHm; /* the player had a stream last frame (each load starts at full volume: the camera's level is set again) */
+/* the camera's sound in the viewer: the same level as in the corner (Settings > Cameras), 0 when its sound is off */
+static int view_level(void) {
+  if (!strcmp(store_get("camSound", "true"), "false"))
+    return 0;
+  int v = atoi(store_get("camVol", "100"));
+  return v < 0 ? 0 : v > 100 ? 100 : v;
+}
 static void view_load(void) {
   V.err[0] = 0;
   V.at = app_now();
@@ -278,6 +288,7 @@ static void view_close(void) {
     return;
   V.open = 0;
   video_unload();
+  video_set_volume(100, 0); /* (the camera's level was the player's: the next film starts at its own) */
   if (app_overlay == &viewScr)
     app_overlay = V.under;
   V.under = NULL;
@@ -291,6 +302,32 @@ int camview_live(void) {
 void camview_close(void) {
   view_close();
 }
+/* the next (1) or previous (-1) camera in the list takes this view: same screen, the connection made again */
+static void view_step(int dir) {
+  int n = cam_count(), cur = -1;
+  Camera t;
+  char u[360];
+  for (int i = 0; i < n && cam_get(i, &t); i++)
+    if (cam_url(&t, u, sizeof u) && !strcmp(u, V.url))
+      cur = i;
+  if (n < 2) {
+    toast(T("There is no other camera"), 1800, NULL);
+    return;
+  }
+  for (int st = 1; st <= n; st++) {
+    int j = (((cur < 0 ? 0 : cur) + dir * st) % n + n) % n;
+    if (cam_get(j, &t) && cam_url(&t, u, sizeof u)) {
+      snprintf(V.name, sizeof V.name, "%s", t.name[0] ? t.name : T("Camera"));
+      snprintf(V.url, sizeof V.url, "%s", u);
+      store_set("pipCam", t.name);
+      view_load();
+      V.hintAt = app_now();
+      memset(&t, 0, sizeof t);
+      memset(u, 0, sizeof u);
+      return;
+    }
+  }
+}
 static int view_key(int k) {
   if (k == K_OK && V.err[0]) {
     view_load();
@@ -298,6 +335,26 @@ static int view_key(int k) {
   }
   if (k == K_BACK || k == K_EXIT || k == K_STOP) {
     view_close();
+    return 1;
+  }
+  if (k == K_LEFT || k == K_RIGHT || k == K_CH_UP || k == K_CH_DOWN) { /* another camera, in this same view */
+    view_step(k == K_RIGHT || k == K_CH_UP ? 1 : -1);
+    return 1;
+  }
+  if (k == K_UP || k == K_DOWN || k == K_FF || k == K_REW || k == K_YELLOW) { /* the camera's sound: louder, quieter, on/off */
+    int v = atoi(store_get("camVol", "100")), d = k == K_UP || k == K_FF ? 10 : k == K_DOWN || k == K_REW ? -10 : 0;
+    if (!d) {
+      store_set("camSound", view_level() ? "false" : "true");
+    } else {
+      v = v + d < 0 ? 0 : v + d > 100 ? 100 : v + d;
+      char b[8];
+      snprintf(b, sizeof b, "%d", v);
+      store_set("camVol", b);
+      if (d > 0)
+        store_set("camSound", "true");
+    }
+    video_set_volume(view_level(), 0);
+    V.soundAt = V.hintAt = app_now();
     return 1;
   }
   V.hintAt = app_now(); /* any other key shows the name again */
@@ -308,6 +365,10 @@ static void view_tick(float dt) {
   if (!V.open)
     return;
   video_pump();
+  int hm = video_has_media();
+  if (hm && !viewHm)
+    video_set_volume(view_level(), 0);
+  viewHm = hm;
   VidState s = video_state();
   if (s == VID_ERROR && !V.err[0]) {
     const char *e = video_error();
@@ -367,7 +428,25 @@ static void view_draw(void) {
     gfx_rrect(x, 56, w, 64, 32, BLACK_A(150));
     text_draw(V.name, x + 32, 56 + 32 - text_line_height(30) / 2.0f, 30, 700, WHITE_A(240), 0, w, ALIGN_LEFT);
     key_hint(rtl ? SB_W - 72 : 72, SB_H - 72, K_BACK, T("Close"), WHITE_A(230), rtl);
+    float hx = rtl ? SB_W - 72 - 220 : 72 + 220;
+    if (cam_count() > 1) {
+      float kw = key_hint(hx, SB_H - 72, K_LEFT, "", WHITE_A(230), rtl);
+      hx += key_hint(hx + kw + 8, SB_H - 72, K_RIGHT, T("Camera"), WHITE_A(230), rtl) + kw + 40;
+    }
+    float kv = key_hint(hx, SB_H - 72, K_UP, "", WHITE_A(230), rtl);
+    key_hint(hx + kv + 8, SB_H - 72, K_DOWN, T("Sound"), WHITE_A(230), rtl);
     gfx_opacity_pop();
+    if (app_now() - V.soundAt < 1.6) {
+      char b[64];
+      if (view_level() > 0)
+        snprintf(b, sizeof b, "%s %d%%", T("Camera sound"), view_level());
+      else
+        snprintf(b, sizeof b, "%s", T("Camera sound off"));
+      float pw = text_width(b, 28, 700, 0) + 48;
+      gfx_rrect(SB_W / 2 - pw / 2, SB_H - 150, pw, 56, 28, BLACK_A(170));
+      text_draw(b, SB_W / 2 - pw / 2 + 24, SB_H - 150 + 28 - text_line_height(28) / 2.0f, 28, 700, WHITE_A(240), 0, pw,
+                ALIGN_LEFT);
+    }
   }
 }
 static Screen viewScr = { NULL, NULL, view_key, view_tick, view_draw, NULL, NULL, NULL };

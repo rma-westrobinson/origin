@@ -1,15 +1,40 @@
 {
-  "version": "3.0.0",
+  "version": "3.0.14",
   "items": [
     {
-      "icon": "wn_people",
-      "title": "A new top bar",
-      "text": "Search, Home, Shows, Movies, Catalogue and My List across the top. Your profile picture opens profiles, Settings and Exit."
+      "icon": "wn_best",
+      "title": "Welcome to Stremio Plus",
+      "text": "A new name and a new icon. Updates now come from this app's own releases: Settings > About > Check for updates."
     },
     {
-      "icon": "wn_best",
-      "title": "Shows, Movies and Anime",
-      "text": "Each tab opens on a billboard with rows of its own and your Continue Watching first, with no limit on how many it shows. Turn on Anime in Settings > Appearance."
+      "icon": "wn_people",
+      "title": "Watch party",
+      "text": "Watch the same title in sync from different places. Invite someone on your account, they accept or decline, and leaving only unsyncs them."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Picture in picture, everywhere",
+      "text": "Press OK on the corner window to bring it back to full screen. Switch between a film and a camera in the corner, and float video on the phone too."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Cameras: sound and switching",
+      "text": "Camera audio with its own volume and mix, and next and previous camera keys in the corner window and the full-screen viewer."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Subtitles that recover",
+      "text": "When a subtitle fails, the player moves to the next track or subtitle, and then to the next source."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Search starts on letters",
+      "text": "The keyboard opens on Q with letters first, and the microphone sits next to the search box."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Continue Watching order",
+      "text": "Continue Watching now refreshes while a film plays in the corner, so what you watched last comes first."
     }
   ]
 }

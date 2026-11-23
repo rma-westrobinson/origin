@@ -163,6 +163,13 @@ void plat_orientation(int landscape) {
 void plat_immersive(int on) {
   fprintf(stderr, "[form] immersive %s\n", on ? "on" : "off");
 }
+void plat_pip_arm(int w, int h) {
+  (void)w;
+  (void)h;
+}
+int plat_pip_active(void) {
+  return 0;
+}
 void plat_haptic(void) {
   fprintf(stderr, "[form] haptic\n");
 }

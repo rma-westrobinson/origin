@@ -1,0 +1,23 @@
+// The Worker's routes end to end, with Durable Objects faked in memory.
+import assert from "node:assert/strict";
+import worker, { PartyRoom, Inbox } from "../src/index.js";
+const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get: (id) => { if (!objs.has(id)) { const m = new Map(); objs.set(id, new Cls({ storage: { get: async (k) => m.get(k), put: async (k, v) => m.set(k, JSON.parse(JSON.stringify(v))), delete: async (k) => m.delete(k) } })); } const o = objs.get(id); return { fetch: (u, init) => o.fetch(new Request(u, init)) }; } }; };
+const env = { ROOMS: ns(PartyRoom), INBOXES: ns(Inbox) };
+const A = "c".repeat(64);
+const call = async (path, body, e = env, headers = {}) => { const r = await worker.fetch(new Request("https://w/v1/" + path, { method: "POST", body: JSON.stringify(body), headers }), e); return { s: r.status, j: await r.json() }; };
+let r = await call("party/create", { a: A, dev: "phone-0001", name: "Phone", media: { type: "movie", id: "tt1", name: "Dune" } });
+assert.equal(r.s, 200); const code = r.j.code; assert.match(code, /^[A-Z2-9]{6}$/);
+await call("inbox/poll", { a: A, dev: "tv-00001", name: "TV" });
+r = await call("inbox/poll", { a: A, dev: "phone-0001", name: "Phone" }); assert.equal(r.j.devices[0].name, "TV");
+await call("inbox/invite", { a: A, dev: "phone-0001", to: "tv-00001", code, media: { name: "Dune" } });
+r = await call("inbox/poll", { a: A, dev: "tv-00001" }); assert.equal(r.j.invites[0].code, code);
+r = await call(`party/${code}/join`, { a: A, dev: "tv-00001", name: "TV" }); assert.equal(r.j.media.name, "Dune");
+await call(`party/${code}/event`, { a: A, dev: "phone-0001", type: "play", pos: 5 });
+r = await call(`party/${code}/poll`, { a: A, dev: "tv-00001", since: 0 }); assert.deepEqual(r.j.events.map((e) => e.type), ["join", "play"]);
+r = await call(`party/${code}/poll`, { a: "d".repeat(64), dev: "evil-0001", since: 0 }); assert.equal(r.s, 403);
+r = await call("party/create", { a: "nothex", dev: "phone-0001" }); assert.equal(r.s, 400);
+r = await call(`party/${code}/leave`, { a: A, dev: "tv-00001" }); assert.equal(r.s, 200);
+const keyed = { ...env, PARTY_KEY: "s3" };
+r = await call("inbox/poll", { a: A, dev: "tv-00001" }, keyed); assert.equal(r.s, 403);
+r = await call("inbox/poll", { a: A, dev: "tv-00001" }, keyed, { "x-party-key": "s3" }); assert.equal(r.s, 200);
+console.log("worker routes: all tests passed");

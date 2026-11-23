@@ -76,6 +76,10 @@ int plat_brightness_get(void); /* this window's brightness 0-100; when it follow
 int plat_brightness_set(int pct); /* 0-100 for this window; -1 = follow the system again; returns 1 done, 0 unsupported */
 int plat_sysvol_get(void); /* the system's media volume 0-100; -1 unsupported */
 int plat_sysvol_set(int pct); /* returns 1 done, 0 unsupported, -2 fixed-volume route (can't change) */
+/* Android's own picture-in-picture (a phone's film floats over other apps; no-ops elsewhere): arm it while a film plays
+   full screen with the picture's size (0, 0 = not now), and whether the app is in the system's small window now */
+void plat_pip_arm(int w, int h);
+int plat_pip_active(void);
 void plat_gesture_insets(int *left, int *top, int *right, int *bottom); /* the system's gesture edges in window px; 0 where none */
 /* the system took the finger away (Android's ACTION_CANCEL, which SDL reports as lifts): the platform pushes an SDL
    user event of this type, ahead of those lifts. 0 where there is none (it then never matches an event) */

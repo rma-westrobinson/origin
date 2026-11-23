@@ -9,7 +9,7 @@
 #include <string.h>
 
 static jclass cls;
-static jmethodID mLoad, mUnload, mWin, mPoll, mErr;
+static jmethodID mLoad, mUnload, mWin, mPoll, mErr, mAudio;
 static struct {
   double st, live;
 } S;
@@ -51,6 +51,7 @@ static int bind(void) {
   M(mWin, "setWindow", "(FFFF)V");
   M(mPoll, "poll", "([D)I");
   M(mErr, "error", "()Ljava/lang/String;");
+  M(mAudio, "setAudio", "(I)V");
 #undef M
   cls = g;
   fprintf(stderr, "[camvid] second player bridge ready\n");
@@ -80,6 +81,13 @@ void camvid_unload(void) {
   clear_exc(e, "unload");
   memset(&S, 0, sizeof S);
   err[0] = 0;
+}
+void camvid_set_audio(int pct) {
+  JNIEnv *e = env();
+  if (!bind() || !e)
+    return;
+  (*e)->CallStaticVoidMethod(e, cls, mAudio, (jint)(pct < 0 ? 0 : pct > 100 ? 100 : pct));
+  clear_exc(e, "audio");
 }
 static float lw[4] = { -1, -1, -1, -1 };
 void camvid_set_window(float x, float y, float w, float h) {

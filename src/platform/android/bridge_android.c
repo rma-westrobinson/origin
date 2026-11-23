@@ -74,6 +74,7 @@ int plat_install_poll(char *msg, int cap) {
 /* ---- phones and tablets: MainActivity's ui* methods (each hops to the UI thread itself) ---- */
 static jclass act;
 static jmethodID mVAv, mVGo, mVPl;
+static jmethodID mPipA, mPipQ;
 static jmethodID mOri, mImm, mHap, mSafe, mOpen, mBrG, mBrS, mVoG, mVoS, mGest;
 static SDL_atomic_t touchCancelEv; /* the event type, registered once on the app thread (0 not yet, -1 none to be had);
                                       SDL_PushEvent is thread-safe */
@@ -102,7 +103,9 @@ static int act_ready(JNIEnv *e) {
   mVAv = (*e)->GetStaticMethodID(e, act, "uiVoiceAvailable", "()Z");
   mVGo = (*e)->GetStaticMethodID(e, act, "uiVoiceStart", "()Z");
   mVPl = (*e)->GetStaticMethodID(e, act, "uiVoicePoll", "()Ljava/lang/String;");
-  if (!mVAv || !mVGo || !mVPl || !mOri || !mImm || !mHap || !mSafe || !mOpen || !mBrG || !mBrS || !mVoG || !mVoS || !mGest) {
+  mPipA = (*e)->GetStaticMethodID(e, act, "uiPipArm", "(II)V");
+  mPipQ = (*e)->GetStaticMethodID(e, act, "uiPipActive", "()I");
+  if (!mPipA || !mPipQ || !mVAv || !mVGo || !mVPl || !mOri || !mImm || !mHap || !mSafe || !mOpen || !mBrG || !mBrS || !mVoG || !mVoS || !mGest) {
     (*e)->ExceptionClear(e);
     (*e)->DeleteGlobalRef(e, act);
     act = NULL;
@@ -173,6 +176,17 @@ void plat_orientation(int landscape) {
 void plat_immersive(int on) {
   if (act_ready(env()))
     call_int(mImm, on);
+}
+void plat_pip_arm(int w, int h) {
+  JNIEnv *e = env();
+  if (!act_ready(e))
+    return;
+  (*e)->CallStaticVoidMethod(e, act, mPipA, (jint)w, (jint)h);
+  if ((*e)->ExceptionCheck(e))
+    (*e)->ExceptionClear(e);
+}
+int plat_pip_active(void) {
+  return call_ret_int(mPipQ, 0, 0, 0);
 }
 void plat_haptic(void) {
   JNIEnv *e = env();

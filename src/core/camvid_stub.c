@@ -14,6 +14,9 @@ void camvid_set_window(float x, float y, float w, float h) {
   (void)w;
   (void)h;
 }
+void camvid_set_audio(int pct) {
+  (void)pct;
+}
 void camvid_pump(void) {}
 VidState camvid_state(void) {
   return VID_IDLE;

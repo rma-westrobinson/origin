@@ -1,6 +1,8 @@
 #include "screens/player.h"
 #include "screens/board.h"
 #include "screens/campip.h"
+#include "core/party.h"
+#include "screens/phone.h"
 #include "core/app.h"
 #include "core/keys.h"
 #include "core/i18n.h"
@@ -275,6 +277,7 @@ typedef struct {
 static struct {
   int open, closing, live, failed, started;
   int mini; /* picture in picture: the film plays in a corner, the app is used (player_open() is 0) */
+  int miniHid, miniHidPaused; /* the corner's film is hidden behind a camera in the corner (kept alive; paused by it) */
   double openedAt;
   char type[16], id[64], vid[80], name[256], logo[512], bg[512], poster[512], sname[600], saddon[96], url[SB_URL_MAX],
       alt[SB_URL_MAX];
@@ -899,7 +902,7 @@ static unsigned cueTimesGen; /* bumped when the lines' times change in place (Au
 static struct {
   unsigned tok;
   double at, checkAt;
-  int wait, tv, mkv, failed, shown, retry, ready;
+  int wait, tv, mkv, failed, shown, retry, ready, chk;
 } SL;
 static int embKind[16]; /* the listed embedded tracks: 1 plain text, 2 SubStation, 0 unknown (the TV's list) */
 /* an embedded track's name in the lists: its own title, else its language, else "Track 3" and what it is (some files
@@ -927,12 +930,41 @@ static void sub_begin(void) {
   SL.at = now_();
   SL.checkAt = 0;
   SL.wait = 1;
-  SL.tv = SL.mkv = SL.failed = SL.shown = SL.retry = SL.ready = 0;
+  SL.tv = SL.mkv = SL.failed = SL.shown = SL.retry = SL.ready = SL.chk = 0;
 }
+/* Subtitle sources that failed (a file that won't load, ends far short of the film, or a track the reader lost), so the
+   fallback never tries one twice. The embedded ones are per stream (sub_reset); the downloaded ones are kept across the
+   automatic stream changes of one pick (a bad file is bad on every stream), cleared on a new pick (subs_bad_clear). */
+static unsigned embBad; /* bit per embedded track idx < 32 */
+static unsigned extBad[24];
+static int nExtBad, subAdv;
+static unsigned url_hash(const char *u) {
+  unsigned h = 2166136261u;
+  for (; *u; u++)
+    h = (h ^ (unsigned char)*u) * 16777619u;
+  return h ? h : 1;
+}
+static int ext_is_bad(const char *u) {
+  unsigned h = url_hash(u);
+  for (int i = 0; i < nExtBad; i++)
+    if (extBad[i] == h)
+      return 1;
+  return 0;
+}
+static void ext_mark_bad(const char *u) {
+  if (!ext_is_bad(u) && nExtBad < 24)
+    extBad[nExtBad++] = url_hash(u);
+}
+static void subs_bad_clear(void) {
+  nExtBad = 0;
+  subAdv = 0;
+}
+static void sub_fallback(const char *why);
 static void sub_reset(void) {
   unsigned t = SL.tok + 1;
   memset(&SL, 0, sizeof SL);
   SL.tok = t;
+  embBad = 0;
   memset(embKind, 0, sizeof embKind);
 }
 static int tv_has_text(int n) {
@@ -983,9 +1015,11 @@ static void on_sub_cues(int status_, Cue *cues, int n, void *ud) {
   fprintf(stderr, "[subs] external: failed (HTTP %d, %s)\n", status_,
           status_ >= 200 && status_ < 300 ? "nothing readable in it" : "no file");
   toast(T("Couldn’t load these subtitles"), 3000, NULL);
+  ext_mark_bad(P.curSub + 4);
   snprintf(P.curSub, sizeof P.curSub, "off");
   SL.wait = 0;
   refresh_tray(4); /* the tray tells the truth: nothing is on */
+  sub_fallback("the file would not load");
 }
 /* a downloaded subtitle is known by the list it came from and its identity there (the same file can be in both lists,
    or twice in one from two addons): only that row is ticked, whatever the lists become after */
@@ -1076,8 +1110,13 @@ static void sub_check(void) {
     } else {
       fprintf(stderr, "[subs] embedded #%d: the file can't be read here (%s)\n", n, mkv_error(mkv));
       toast(T("Subtitle extraction failed"), 3000, NULL);
+      if (n >= 0 && n < 32)
+        embBad |= 1u << n;
       snprintf(P.curSub, sizeof P.curSub, "off");
       mkv_select(mkv, -1);
+      refresh_tray(4);
+      sub_fallback("the embedded track can't be read");
+      return;
     }
     refresh_tray(4);
   } else if (!st && SL.wait && !SL.tv && !SL.ready && now_() - SL.at > 6 && k >= 0 && embKind[k] == 1 &&
@@ -1086,6 +1125,32 @@ static void sub_check(void) {
     video_select_text(n);
     fprintf(stderr, "[subs] embedded #%d still being read: the TV draws it meanwhile\n", n);
   }
+}
+/* A downloaded subtitle that read fine but stops far short of the film is a truncated or wrong-cut file: its lines run out
+   while the film goes on. The only signal used is that file's own last line against the film's length, never a quiet
+   stretch inside it: a gap can be a quiet scene, a file that ends in the first 80 % of a 10 min+ film cannot (credits
+   and a long silent ending are well inside the last fifth). Checked once per file, as soon as both are known. */
+static void sub_health(void) {
+  if (SL.chk || SL.wait || strncmp(P.curSub, "ext:", 4) || !P.ncues || !P.live || P.isTrailer || dur() < 600)
+    return;
+  SL.chk = 1;
+  double last = 0;
+  for (int i = 0; i < P.ncues; i++)
+    if (P.cues[i].e > last)
+      last = P.cues[i].e;
+  if (last >= dur() * 0.8 || dur() - last < 300)
+    return;
+  fprintf(stderr, "[subs] external: the file ends at %.0f s of a %.0f s film (%d lines): truncated or the wrong cut\n",
+          last, dur(), P.ncues);
+  ext_mark_bad(P.curSub + 4);
+  sync_stop(0);
+  snprintf(P.curSub, sizeof P.curSub, "off");
+  subs_free(P.cues, P.ncues);
+  P.cues = NULL;
+  P.ncues = 0;
+  SL.wait = 0;
+  refresh_tray(4);
+  sub_fallback("the file ends early");
 }
 /* an embedded ASS / SSA track read from the file is drawn styled (libass) while the setting says so; plain otherwise,
    and from the moment renders get too slow here */
@@ -2758,6 +2823,8 @@ static void build_btns(void) {
     B("aud", "p_aud", T("Audio"), 0);
   const char *am = !strcmp(P.aspect, "fill") ? "Fill the screen" : !strcmp(P.aspect, "zoom") ? "Zoom" : "Original";
   B("asp", "p_asp", T(am), 0);
+  if (!P.isTrailer && party_available())
+    B("party", "set_party", T("Watch party"), 0); /* core/party.h */
   if (!P.isTrailer && campip_available() && cam_count() > 0)
     B("cam", "set_cam", T("Camera in the corner"), 0); /* a security camera floats over the film (screens/campip.h) */
 #undef B
@@ -4838,6 +4905,8 @@ static void act(const char *id) {
     cc_toggle();
   else if (!strcmp(id, "cam"))
     campip_toggle();
+  else if (!strcmp(id, "party"))
+    party_menu_open();
   else
     open_tray(!strcmp(id, "eps") ? 1 : !strcmp(id, "src") ? 2 : !strcmp(id, "aud") ? 3 : 4);
   arm_hide();
@@ -5754,8 +5823,63 @@ static void try_next(void) {
   bestTok =
       best_choose(P.type, P.vid, best_dur(P.meta, P.type), on_best_status, on_best_done, (void *)(uintptr_t)bestSess);
 }
+/* A subtitle that was on has failed (sub_fallback's callers: the file won't load, ends early, or the reader lost the
+   track). The next one in the same language is chosen (the file's own tracks first, then the two downloaded lists),
+   skipping every one that already failed; when none is left, the next stream (twice per pick, and only when the
+   stream list has another). Only real failures arrive here, never a quiet stretch. */
+static void sub_fallback(const char *why) {
+  if (!P.open || P.isTrailer)
+    return;
+  const char *w = want_sub();
+  char lang[24];
+  snprintf(lang, sizeof lang, "%s", P.pick.list && P.pick.lang[0] ? P.pick.lang : w);
+  for (int pass = 0; pass < 2; pass++) {
+    const char *l = pass ? w : lang; /* the failed one's language first, then the viewer's */
+    if (pass && !strcmp(l, lang))
+      break;
+    int em = -1;
+    for (int j = 0; j < P.nEmb; j++) {
+      int n = P.emb[j].idx;
+      if (n >= 0 && n < 32 && (embBad >> n & 1))
+        continue;
+      if (lang_match(P.emb[j].lang, l) && (em < 0 || (P.emb[em].forced && !P.emb[j].forced)))
+        em = j;
+    }
+    if (em >= 0) {
+      fprintf(stderr, "[subs] fallback (%s): embedded #%d\n", why, P.emb[em].idx);
+      toast(T("Subtitles failed: trying another track"), 3000, NULL);
+      set_emb_sub(P.emb[em].idx);
+      return;
+    }
+    for (int i = 0; i < P.nExt; i++)
+      if (lang_match(P.ext[i].lang, l) && !ext_is_bad(P.ext[i].url)) {
+        fprintf(stderr, "[subs] fallback (%s): downloaded subtitle %d\n", why, i);
+        toast(T("Subtitles failed: trying another track"), 3000, NULL);
+        set_ext_sub(1, &P.ext[i]);
+        return;
+      }
+    for (int i = 0; i < P.nAdx; i++)
+      if (lang_match(P.adx[i].lang, l) && !ext_is_bad(P.adx[i].url)) {
+        fprintf(stderr, "[subs] fallback (%s): addon subtitle %d\n", why, i);
+        toast(T("Subtitles failed: trying another track"), 3000, NULL);
+        set_ext_sub(2, &P.adx[i]);
+        return;
+      }
+  }
+  /* the lists may still be loading: wait, and do not leave the stream for a subtitle that may yet arrive */
+  if (P.extLoading || P.adxLoading || (!P.embKnown && !P.embWaitOver))
+    return;
+  if (P.canNext && subAdv < 2 && autoN < AUTO_NEXT_MAX) {
+    subAdv++;
+    autoN++;
+    fprintf(stderr, "[subs] fallback (%s): no other subtitle, trying the next stream (%d/2)\n", why, subAdv);
+    toast(T("No working subtitles: trying the next stream"), 3000, NULL);
+    try_next();
+  }
+}
 void player_choose_best(const char *type, const char *id, const char *vid) {
   autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
+  subs_bad_clear();
   open_title(type, id);
   prepare(vid, 0, 0);
   set_status(T("Choosing the best stream"));
@@ -5764,6 +5888,7 @@ void player_choose_best(const char *type, const char *id, const char *vid) {
 }
 void player_play(const Stream *s, const char *type, const char *id, const char *vid, int fromStart) {
   autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
+  subs_bad_clear();
   open_title(type, id);
   play_stream(s, vid, fromStart ? -1 : 0);
 }
@@ -5790,6 +5915,7 @@ void player_next_art(const char *name, const char *poster, const char *bg, const
 }
 void player_play_at(const Stream *s, const char *type, const char *id, const char *vid, double pos) {
   autoN = 0; /* a new pick by the user: a fresh run of automatic tries */
+  subs_bad_clear();
   open_title(type, id);
   play_stream(s, vid, pos > 0 ? pos : 0);
 }
@@ -5962,6 +6088,28 @@ int player_cast_state(double *pos, double *du, char *title, int cap) {
   *du = dur();
   return vs == VID_ENDED ? 4 : vs == VID_ERROR ? 5 : paused() ? 3 : vs == VID_LOADING || vs == VID_BUFFERING ? 1 : 2;
 }
+/* what plays now, for the watch party: a film (never a trailer) with its picture up; 1 when so. paused: 1 when paused */
+int player_now(char *type, char *id, char *vid, char *name, int cap) {
+  if (type)
+    *type = 0;
+  if (id)
+    *id = 0;
+  if (vid)
+    *vid = 0;
+  if (name)
+    *name = 0;
+  if (!P.open || P.closing || P.isTrailer || !P.live)
+    return 0;
+  if (type)
+    snprintf(type, (size_t)cap < sizeof P.type ? (size_t)cap : sizeof P.type, "%s", P.type);
+  if (id)
+    snprintf(id, (size_t)cap < sizeof P.id ? (size_t)cap : sizeof P.id, "%s", P.id);
+  if (vid)
+    snprintf(vid, (size_t)cap < sizeof P.vid ? (size_t)cap : sizeof P.vid, "%s", P.vid);
+  if (name)
+    snprintf(name, (size_t)cap, "%s", P.name);
+  return 1;
+}
 static void finish_close(void) {
   sync_stop(0);
   gfx_target_free(&handSnap);
@@ -6064,11 +6212,22 @@ static void close_step(void) {
 #define PIP_H 270.0f
 #define PIP_M 48.0f
 static void pip_rect(float *x, float *y, float *w, float *h) {
+  if (form_touch()) { /* a phone: a wider share of the narrow canvas, above the tab bar and the system's bar */
+    *w = fminf(260.0f, SB_W * 0.5f);
+    *h = *w * PIP_H / PIP_W;
+    float m = 12.0f;
+    *x = app_rtl() ? m : SB_W - m - *w;
+    *y = phone_bottom() - m - *h;
+    return;
+  }
   *w = fminf(PIP_W, SB_W * 0.4f); /* (a phone's narrow canvas: smaller) */
   *h = *w * PIP_H / PIP_W;
   float m = fminf(PIP_M, SB_W * 0.04f);
   *x = app_rtl() ? m : SB_W - m - *w;
   *y = SB_H - m - *h;
+}
+void player_mini_rect(float *x, float *y, float *w, float *h) {
+  pip_rect(x, y, w, h);
 }
 static int mini_ok(void) {
   if (!P.open || P.closing || P.mini || !P.started || !P.live || P.failed)
@@ -6090,7 +6249,8 @@ static void minimize(void) {
   P.endGoAt = 0;
   P.prompt.autoN = 0;
   save_progress(1);
-  campip_close(); /* the film takes the corner: a camera and a film in the corner never show together */
+  campip_hide(1); /* the film takes the corner: a camera in the corner is kept alive, hidden (the toggle brings it back) */
+  P.miniHid = 0;
   P.mini = 1;
   sx_begin_quick(0); /* the player's logo moves back to the page, as when it closes */
   accent_scope(SCR == SCR_DETAIL ? P.id : NULL, P.poster, P.logo);
@@ -6103,6 +6263,7 @@ static void minimize(void) {
 static void mini_drop(void) {
   if (!P.open || !P.mini)
     return;
+  P.miniHid = P.miniHidPaused = 0;
   VidState s = video_state();
   if (s == VID_PLAYING || s == VID_PAUSED || s == VID_BUFFERING)
     save_progress(1);
@@ -6111,6 +6272,8 @@ static void mini_drop(void) {
   video_set_window(0, 0, SB_W, SB_H); /* the next picture starts where a film's goes, not in the corner */
 }
 static void mini_tick(void) {
+  if (P.miniHid && !campip_active())
+    player_mini_hide(0); /* the camera that hid it is gone: the film is back in the corner */
   video_pump();
   VidState vs = video_state();
   if (vs == VID_ENDED) {
@@ -6136,12 +6299,42 @@ static void mini_expand(int a, int b) {
   if (!P.open || !P.mini)
     return;
   P.mini = 0;
+  P.miniHid = P.miniHidPaused = 0;
   P.lastVw = -1; /* the picture is placed full screen again by the next tick */
   show_osd(0);
+}
+void player_mini_expand(void) {
+  mini_expand(0, 0);
+}
+int player_mini_visible(void) {
+  return P.open && P.mini && !P.miniHid;
+}
+/* a camera takes the corner: the film is kept (decoder, place in the film), paused and silent, its window out of
+   sight; the film's progress is saved. Showing it again resumes it if the hiding paused it. */
+void player_mini_hide(int hide) {
+  if (!P.open || !P.mini || P.miniHid == !!hide)
+    return;
+  P.miniHid = !!hide;
+  if (hide) {
+    P.miniHidPaused = !paused();
+    if (P.miniHidPaused) {
+      video_pause();
+      save_progress(1);
+    }
+    video_set_window(SB_W, SB_H, 0, 0);
+  } else {
+    if (P.miniHidPaused)
+      video_play();
+    P.miniHidPaused = 0;
+  }
 }
 void player_mini_draw(void) {
   if (!P.open || !P.mini)
     return;
+  if (P.miniHid) {
+    video_set_window(SB_W, SB_H, 0, 0);
+    return;
+  }
   float x, y, w, h;
   pip_rect(&x, &y, &w, &h);
   video_set_window(x, y, w, h);
@@ -6153,11 +6346,12 @@ void player_mini_draw(void) {
     gfx_rrect(cx - bw * 1.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
     gfx_rrect(cx + bw * 0.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
   }
+  campip_focus_draw(0, x, y, w, h);
   hit_act(x, y, w, h, mini_expand, 0, 0);
 }
 /* the remote's media keys act on the corner's film; 1 when the key was used */
 int player_mini_key(int k) {
-  if (!P.open || !P.mini)
+  if (!P.open || !P.mini || P.miniHid)
     return 0;
   if (k == K_PLAYPAUSE || k == K_PLAY || k == K_PAUSE) {
     if (k == K_PLAYPAUSE ? paused() : k == K_PLAY)
@@ -6740,6 +6934,7 @@ void player_tick(float dt) {
     auto_sub();
   }
   sub_check();
+  sub_health();
   ass_sync();
   sk_tick();
   loc_apply();
@@ -8635,6 +8830,8 @@ static void draw_tray(void) {
 void player_draw(void) {
   if (!P.open)
     return;
+  if (plat_pip_active())
+    return; /* Android's picture-in-picture window: the picture alone, no controls */
   float a = P.in.v;
   gfx_opacity_push(a);
   if (P.live && P.artA.v < 0.999f) {
@@ -10028,7 +10225,10 @@ void player_touch(int type, float x, float y) {
       return;
     }
     if (ph_hit(&PHG.back, x, y)) {
-      close_player(0, 0);
+      if (mini_ok())
+        minimize(); /* the chevron: the film stays in a window above the page (a tap on it brings it back) */
+      else
+        close_player(0, 0);
       return;
     }
     if (ph_hit(&PHG.more, x, y)) {

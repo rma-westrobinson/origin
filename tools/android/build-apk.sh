@@ -30,18 +30,16 @@ A="$G/app/src/main/assets/app"; mkdir -p "$A"; cp -r "$ROOT/assets" "$A/assets";
 APP_NAME="$(sed -n 's/^#define APP_NAME "\(.*\)"$/\1/p' "$ROOT/src/core/brand.h")"; [ -n "$APP_NAME" ] || { echo "no APP_NAME in src/core/brand.h"; exit 1; }
 mkdir -p "$G/app/src/main/res/values"
 printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="app_name">%s</string></resources>\n' "$APP_NAME" > "$G/app/src/main/res/values/strings.xml"
-# the launcher icon and the TV banner, drawn from the webOS icons
+# the launcher icon (assets/logo.png, drawn by tools/gen-icon.py) and the TV banner (packaging/android/banner.png)
 python3 - "$ROOT" "$G/app/src/main/res" <<'PY'
 import sys, os
 from PIL import Image
 root, res = sys.argv[1], sys.argv[2]
-icon = Image.open(os.path.join(root, 'packaging/webos/largeIcon.png')).convert('RGBA')
+icon = Image.open(os.path.join(root, 'assets/logo.png')).convert('RGBA')
 for d, s in (('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)):
     os.makedirs(f'{res}/mipmap-{d}', exist_ok=True); icon.resize((s, s), Image.LANCZOS).save(f'{res}/mipmap-{d}/ic_launcher.png')
 os.makedirs(f'{res}/drawable-xhdpi', exist_ok=True)
-b = Image.new('RGBA', (320, 180), (12, 11, 17, 255))
-logo = Image.open(os.path.join(root, 'assets/logo.png')).convert('RGBA'); k = min(260 / logo.width, 120 / logo.height); logo = logo.resize((max(1, int(logo.width * k)), max(1, int(logo.height * k))), Image.LANCZOS)
-b.alpha_composite(logo, ((320 - logo.width) // 2, (180 - logo.height) // 2)); b.convert('RGB').save(f'{res}/drawable-xhdpi/banner.png')
+Image.open(os.path.join(root, 'packaging/android/banner.png')).convert('RGB').resize((320, 180), Image.LANCZOS).save(f'{res}/drawable-xhdpi/banner.png')
 PY
 
 # ---- the signing key (once) ----

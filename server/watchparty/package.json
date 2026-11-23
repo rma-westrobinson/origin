@@ -1,0 +1,1 @@
+{ "name": "origin-watchparty", "private": true, "type": "module", "scripts": { "test": "node test/logic.test.mjs && node test/worker.test.mjs", "deploy": "wrangler deploy" } }

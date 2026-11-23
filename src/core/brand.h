@@ -3,5 +3,5 @@
    (the package name, the log tag, the User-Agent) are not the name and stay as they are. */
 #ifndef SB_BRAND_H
 #define SB_BRAND_H
-#define APP_NAME "Streamer"
+#define APP_NAME "Stremio Plus"
 #endif

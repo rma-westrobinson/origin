@@ -30,6 +30,7 @@
 #include "core/anime_addon.h"
 #include "core/sync.h"
 #include "core/update.h"
+#include "core/party.h"
 #include "screens/btrailer.h"
 #include "screens/board.h"
 #include "screens/login.h"
@@ -644,11 +645,15 @@ static void toast_draw(void) {
 }
 static double exitAt = -10;
 void exit_ask(void) {
+  if (campip_visible()) {
+    campip_close();
+    return; /* the window showing in the corner closes first (a camera) ... */
+  }
   if (player_mini_close())
-    return; /* a film in the corner: Back at the last page closes it first */
+    return; /* ... a film in the corner: Back at the last page closes it first */
   if (campip_active()) {
     campip_close();
-    return; /* and so does a camera in the corner */
+    return; /* and so does a camera kept hidden */
   }
   if (NOW - exitAt < 2.5) {
     app_quit();
@@ -1986,6 +1991,8 @@ void app_pointer_button(int down, float x, float y) {
   PTR.y = y;
   if (saver_on())
     return; /* the screensaver covers the page: nothing under it is pressed */
+  if (down && party_click(x, y))
+    return; /* a click on the watch party's invite or menu */
   if (down) {
     ptr_show();
     idle_touch();
@@ -2249,6 +2256,8 @@ static void key_core(int k, int down, int repeat) {
   } /* a key moves the focus: the page follows it again */
   if (k == K_OK)
     okDown = down;
+  if (party_key(k, down))
+    return; /* the watch party's invite or menu has the keys while it is up (and the yellow key opens the menu) */
   if (player_open()) {
     if (!(k == K_OK && repeat && down))
       player_key(k, down);
@@ -2259,6 +2268,8 @@ static void key_core(int k, int down, int repeat) {
       ok_up();
     return;
   }
+  if (pip_focus_key(k))
+    return; /* the focus is on the corner window: OK expands it */
   if (player_mini_key(k))
     return; /* play, pause, stop: for the film in the corner */
   if (campip_key(k))
@@ -2271,6 +2282,7 @@ static void key_core(int k, int down, int repeat) {
     curKey = k;
     idle_touch_by(why);
   }
+  int kPhys = k; /* (the arrow as pressed: the corner window's side is on the screen, not in the reading order) */
   k = app_mirror_key(k); /* mirrored layout: Left moves forward (every screen sees the logical direction) */
   if (k >= K_LEFT &&
       k <= K_DOWN) { /* an arrow: a tap when the focus moved (a screen's own sound, e.g. a filter, wins) */
@@ -2279,6 +2291,10 @@ static void key_core(int k, int down, int repeat) {
     double t0 = NOW;
     key_dispatch(k, repeat);
     focus_sig(&f1);
+    if (!memcmp(&f0, &f1, sizeof f0) && f1.known && pip_focus_try(kPhys)) {
+      sound_play(SND_FOCUS); /* the arrow moved nothing on the page: the window in the corner has the focus */
+      return;
+    }
     /* the glows lean the way it went: a tab sweeps them across, a step only leans them (held keys, less) */
     if (f1.nav && f1.navIdx != f0.navIdx)
       orbs_pulse(f1.navIdx > f0.navIdx ? ORB_TAB_R : ORB_TAB_L, 0.8f);
@@ -2514,6 +2530,7 @@ void app_tick(float dt) {
   if (app_splash_done && !player_open() && app_anime_on())
     lib_anime_tick();
   update_tick(dt);
+  party_tick(); /* the watch party's inbox and room (polls, invites, the others' play and pause) */
   best_tick();
   curKey = 0; /* (a page switch later in the frame is not a key's) */
   {
@@ -2541,6 +2558,18 @@ void app_tick(float dt) {
     }
   } /* into the player: one faint sound, then the film has the audio alone; a phone turns sideways for it, its bars go,
        and the canvas is the TV's (back upright after) */
+  if (form_touch()) {
+    /* Android's own picture-in-picture: armed while a film plays full screen (the activity enters the small window when
+       the user leaves the app), with the picture's shape for the window */
+    static int armW = -1, armH = -1;
+    int ok = player_live() && !player_paused() && video_width() > 0 && video_height() > 0;
+    int w = ok ? video_width() : 0, h = ok ? video_height() : 0;
+    if (w != armW || h != armH) {
+      armW = w;
+      armH = h;
+      plat_pip_arm(w, h);
+    }
+  }
   castlink_tick(dt); /* (a phone drives the film too: before the app rests under it) */
   player_tick(dt);
   campip_tick(); /* (before the app rests under a film: the camera in the corner goes on) */
@@ -2763,6 +2792,7 @@ void app_draw(void) {
     sx_flush();
     campip_draw(); /* a camera over the film: its window cut out of the controls */
     toast_draw();
+    party_draw();
     saver_draw();
     return;
   }
@@ -2775,5 +2805,6 @@ void app_draw(void) {
   player_mini_draw(); /* a film in the corner: its window cut out of the page */
   campip_draw(); /* a camera in the corner (never with the film's) */
   toast_draw();
+  party_draw(); /* an invite or the party menu, over the page */
   saver_draw();
 }

@@ -22,8 +22,9 @@ import androidx.media3.exoplayer.rtsp.RtspMediaSource;
 
 /* The second player, behind src/platform/android/camvid_android.c: one security camera (RTSP) in a small window while
    SbPlayer has a film or the page. Its own ExoPlayer and its own SurfaceView, added after the film's so it is drawn
-   over it, and under SDL's translucent surface (which cuts a hole where the window is). The camera is silent: its audio
-   is switched off in the player, and it takes no audio focus, so it never touches the film's sound. Same threading as
+   over it, and under SDL's translucent surface (which cuts a hole where the window is). The camera's sound is the C
+   side's choice (setAudio: 0 is silent, the audio track is then not even decoded); it takes no audio focus, so it mixes
+   with the film's sound instead of pausing it. Same threading as
    SbPlayer: ExoPlayer on the main thread, commands posted, a snapshot polled by the C side. */
 @androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public final class SbCam {
@@ -42,6 +43,7 @@ public final class SbCam {
     static boolean firstFrame, hasError;
     static int vw, vh;
     static float[] win = { 0, 0, 0, 0 };
+    static int audioPct = 0;                       // 0: silent (the audio track is switched off), else the volume
 
     static void attach(Context c, ViewGroup b) {
         ctx = c; box = b;
@@ -61,9 +63,9 @@ public final class SbCam {
     static ExoPlayer make() {
         ExoPlayer p = new ExoPlayer.Builder(ctx).build();   // (audio focus is not handled: the default is off)
         p.setVideoSurfaceView(surface);
-        p.setVolume(0f);
         p.setTrackSelectionParameters(p.getTrackSelectionParameters().buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build());
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, audioPct <= 0).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build());
+        p.setVolume(audioPct / 100f);
         p.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int s) { refresh(); }
             @Override public void onIsPlayingChanged(boolean playing) { refresh(); }
@@ -98,6 +100,17 @@ public final class SbCam {
             if (holder != null) holder.setVisibility(View.GONE);
             firstFrame = hasError = false; vw = vh = 0;
             refresh();
+        });
+    }
+    /* the camera's sound, 0-100: 0 switches the audio track off, anything else plays it at that level */
+    public static void setAudio(int pct) {
+        final int v = Math.max(0, Math.min(100, pct));
+        ui.post(() -> {
+            audioPct = v;
+            if (player == null) return;
+            player.setVolume(v / 100f);
+            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, v <= 0).build());
         });
     }
     public static void setWindow(float x, float y, float w, float h) { ui.post(() -> { win = new float[] { x, y, w, h }; place(); }); }

@@ -7,6 +7,7 @@
 #include "screens/board.h"
 #include "platform/plat.h"
 #include "core/keys.h"
+#include "core/party.h"
 #include "core/i18n.h"
 #include "core/store.h"
 #include "core/json.h"
@@ -93,6 +94,7 @@ static const Opt LANG_OPTS[] = { { "", "Off" },         { "eng", "English" },   
                                  { "tur", "Turkish" },  { "pol", "Polish" },     { "dut", "Dutch" },
                                  { "swe", "Swedish" },  { "heb", "Hebrew" },     { "hin", "Hindi" },
                                  { "jpn", "Japanese" }, { "kor", "Korean" },     { "chi", "Chinese" } };
+static const Opt CAMMIX[] = { { "100", "As it is" }, { "60", "60%" }, { "40", "40%" }, { "25", "25%" }, { "10", "10%" }, { "0", "Silent" } };
 static const Opt SEEK[] = { { "5", "5s" }, { "10", "10s" }, { "15", "15s" }, { "20", "20s" }, { "30", "30s" } };
 static const Opt DTSM[] = {
   { "auto", "Auto" }, { "convert", "Convert" }, { "off", "Off" }
@@ -130,10 +132,10 @@ static const Opt ACCENT_OPTS[] = { { "logo", "From the logo" },
                                    { "blue", "Blue" },
                                    { "indigo", "Indigo" },
                                    { "graphite", "Graphite" } };
-#define NCAT 12
+#define NCAT 14
 #define MAXROWS 48
-static Setting recsS[12];
-static Setting camS[CAM_MAX + 3], playBase[9], playS[9], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
+static Setting recsS[12], partyS[2];
+static Setting camS[CAM_MAX + 7], playBase[9], playS[9], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
     profS[4];
 static Opt subProviderOpts[ADDONS_MAX + 1];
 static char subProviderKeys[ADDONS_MAX][SUBS_PROVIDER_KEY_SIZE], subProviderNames[ADDONS_MAX][96];
@@ -403,6 +405,14 @@ static int cams_opts(void) {
   if (campip_available() && n > 2)
     set_act(&camS[n++], "__camPip", campip_active() ? "Close the camera in the corner" : "Float a camera in the corner",
             "Shows the last camera you watched in a small window while you browse or watch a film");
+  if (campip_available() && n > 2) {
+    set_s(&camS[n++], "camSound", "Camera sound", "The camera's microphone, in the corner and in the full screen view. Yellow key: on and off", OO, 2, "true");
+    set_s(&camS[n++], "camVol", "Camera volume", "Up and Down in the full screen view; the channel keys on the focused corner window", SVOL, 10, "100");
+    set_s(&camS[n++], "camFilmMix", "Film volume under the camera",
+          "When the camera has sound over a film playing full screen, the film is this loud, so the camera is heard", CAMMIX, 6, "40");
+    set_act(&camS[n++], "__camSwap", "Switch the film and the camera in the corner",
+            "One shows at a time, the other is kept and comes back. Down on the focused window does the same");
+  }
   return n;
 }
 static void cams_rows_again(void) {
@@ -698,6 +708,9 @@ static void build(void) {
     s->opts = s->dyn;
     s->nopts = n;
   }
+  set_act(&partyS[0], "__partyMenu", "Watch party", "Start one, invite another device on this account, or leave");
+  set_s(&partyS[1], "partyOn", "Get watch party invites", "Off: this device never asks the watch party server for invites", OO, 2,
+        "true");
   int nl = lang_opts(), nk = keys_opts(), na = addon_opts(), nr = recs_opts(), ncam = cams_opts();
   set_act(&acctS[0], "__logout", "Log out", S.acct);
   acctS[0].raw = 1;
@@ -722,7 +735,7 @@ static void build(void) {
   }
   int nab = about_opts();
   /* grouped by task: what you watch, what the screens look like, account and system; Log out on its own, last */
-  Cat c[NCAT] = {
+  Cat c[] = {
     { "Watch", "Playback", "set_play", "Seek step, next episode, picture size", NULL, playS, 6,
       0 }, /* (the count: play_layout) */
     { "Watch", "Subtitles", "set_subs", "Language, size, colour, opacity, background", "subs", subsS, 9, 0 },
@@ -733,12 +746,13 @@ static void build(void) {
     { "Account and system", "Account", "set_acct", "Stremio or Nuvio, and your profiles", NULL, profS, nprof, 0 },
     { "Account and system", "Addons", "set_addon", "", NULL, addonS, na, 0 },
     { "Account and system", "Keys", "set_keys", "Titles in your language, ratings and reviews", "keys", keyS, nk, 0 },
+    { "Account and system", "Watch party", "set_party", "Watch together, from different places", NULL, partyS, 2, 0 },
     { "Account and system", "Cameras", "set_cam", "Watch your security cameras here", NULL, camS, ncam, 0 },
     { "Account and system", "About", "info", "Version, updates and logs", "about", supS, nab, 0 },
     { "", "Log out", "set_out", "", NULL, acctS, 1, 1 }
   };
   ncat = 0;
-  for (int i = 0; i < NCAT; i++)
+  for (int i = 0; i < (int)(sizeof c / sizeof c[0]) && i < NCAT; i++)
     if (c[i].opts != keyS || nk)
       cats[ncat++] = c[i];
   play_layout();
@@ -1527,11 +1541,17 @@ static int key(int k) {
         settings_open_keys();
         return 1;
       }
+      if (!strcmp(op->k, "__partyMenu")) {
+        party_menu_open();
+        return 1;
+      }
       if (!strncmp(op->k, "__cam", 5)) {
         Camera c;
         if (!strcmp(op->k, "__camPip")) {
           campip_toggle();
           cams_rows_again(); /* (its row says close now, or float) */
+        } else if (!strcmp(op->k, "__camSwap")) {
+          campip_swap();
         } else if (!strcmp(op->k, "__camPhone"))
           cameras_add_phone();
         else if (!strcmp(op->k, "__camTv"))

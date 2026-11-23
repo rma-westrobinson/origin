@@ -90,15 +90,23 @@ static int slowlog(void) {
     }                                                                       \
   } while (0)
 /* the keyboard (search.h): where each row starts in SEARCH_KEYS, and how far in it sits, in keys */
-static const int KROW0[SEARCH_KROWS + 1] = { 0, 10, 20, 29, 36 };
-static const float KOFF[SEARCH_KROWS] = { 0, 0, 0.5f, 1.0f };
+static const int KROW0[SEARCH_KROWS + 1] = { 0, 10, 19, 26, 36 };
+static const float KOFF[SEARCH_KROWS] = { 0, 0.5f, 1.0f, 0 };
 int search_key_row_len(int r) {
-  return r < SEARCH_KROWS ? KROW0[r + 1] - KROW0[r] : 3 + plat_voice_available();
-} /* (the last row: Space, Backspace, Clear, and a microphone where the system has a speech recognizer) */
+  if (r < 0)
+    return plat_voice_available() ? 1 : 0;
+  return r < SEARCH_KROWS ? KROW0[r + 1] - KROW0[r] : 3;
+} /* (row -1: the microphone beside the query box, where the system has a speech recognizer; the last row: Space,
+     Backspace, Clear) */
 int search_key_index(int r, int c) {
-  return r < SEARCH_KROWS ? KROW0[r] + c : NK + c;
+  return r < 0 ? NK + 3 : r < SEARCH_KROWS ? KROW0[r] + c : NK + c;
 }
 void search_key_rc(int ki, int *r, int *c) {
+  if (ki == NK + 3) {
+    *r = -1;
+    *c = 0;
+    return;
+  }
   if (ki >= NK) {
     *r = SEARCH_KROWS;
     *c = ki - NK;
@@ -113,11 +121,17 @@ void search_key_rc(int ki, int *r, int *c) {
 void search_key_pos(int ki, float *x, float *y, float *w) {
   int r, c;
   search_key_rc(ki, &r, &c);
+  if (r < 0) { /* the microphone: right of the query box (76 high, the key 66 in its middle) */
+    *x = 9 * SEARCH_KPITCH + SEARCH_KW - SEARCH_MICW;
+    *w = SEARCH_MICW;
+    *y = -(76 + 18) + 5;
+    return;
+  }
   if (r < SEARCH_KROWS) {
     *x = (KOFF[r] + c) * SEARCH_KPITCH;
     *w = SEARCH_KW;
   } else {
-    int nk = search_key_row_len(SEARCH_KROWS);
+    int nk = 3;
     float bw = (9 * SEARCH_KPITCH + SEARCH_KW - (nk - 1) * 8) / nk;
     *x = c * (bw + 8);
     *w = bw;
@@ -797,6 +811,9 @@ static int key(int k) {
       if (S.kr > 0) {
         S.kr--;
         S.kc = key_near(S.kr, mx);
+      } else if (S.kr == 0 && plat_voice_available() && mx >= 9 * SEARCH_KPITCH + SEARCH_KW - 2.5f * SEARCH_KPITCH) {
+        S.kr = -1; /* from the keys under it, the microphone beside the query box */
+        S.kc = 0;
       } else {
         topnav_focus();
         return 1;
@@ -989,18 +1006,19 @@ static void draw(void) {
   gfx_opacity_push(S.in.on ? ia : 1);
   gfx_offset_push(0, S.in.on ? iy : 0); /* the pieces rise in; the grid only fades (its own scroll stays) */
   /* the query box */
-  float qx = rtl ? SB_W - LEFT_X - 552 : LEFT_X, qy = TOP_Y;
-  gfx_rrect(qx, qy, 552, 76, 20, WHITE_A(18));
-  gfx_ring(qx, qy, 552, 76, 20, 1, WHITE_A(26));
-  icon_draw("search_box", rtl ? qx + 552 - 24 - 32 : qx + 24, qy + 22, 32, WHITE_A(153));
-  float tx = rtl ? qx + 552 - 24 - 32 - 16 : qx + 24 + 32 + 16, th = text_line_height(32);
+  float qw = 552 - (plat_voice_available() ? SEARCH_MICW + SEARCH_MICGAP : 0); /* the microphone sits right of the box */
+  float qx = rtl ? SB_W - LEFT_X - 552 : LEFT_X, qy = TOP_Y; /* (the keys keep their order in every language: the box is at the left of the panel) */
+  gfx_rrect(qx, qy, qw, 76, 20, WHITE_A(18));
+  gfx_ring(qx, qy, qw, 76, 20, 1, WHITE_A(26));
+  icon_draw("search_box", rtl ? qx + qw - 24 - 32 : qx + 24, qy + 22, 32, WHITE_A(153));
+  float tx = rtl ? qx + qw - 24 - 32 - 16 : qx + 24 + 32 + 16, th = text_line_height(32);
   /* the text cursor: rounded, gliding to where the next letter goes, solid while typing, else a soft slow breath */
   float cw = 0;
   if (S.q[0])
-    cw = text_draw(S.q, tx, qy + (76 - th) / 2, 32, 600, WHITE_A(255), 0, 552 - 120, rtl ? ALIGN_RIGHT : ALIGN_LEFT);
+    cw = text_draw(S.q, tx, qy + (76 - th) / 2, 32, 600, WHITE_A(255), 0, qw - 120, rtl ? ALIGN_RIGHT : ALIGN_LEFT);
   else
     text_draw(T("Search films and series"), rtl ? tx - 14 : tx + 14, qy + (76 - th) / 2, 32, 500, WHITE_A(133), 0,
-              552 - 120, rtl ? ALIGN_RIGHT : ALIGN_LEFT);
+              qw - 120, rtl ? ALIGN_RIGHT : ALIGN_LEFT);
   {
     float want = S.q[0] ? cw + 4 : 0;
     if (S.caretX.to != want) {
@@ -1017,7 +1035,7 @@ static void draw(void) {
     gfx_rrect(cx, qy + 20, 3, 36, 1.5f, col_alpha(ACC2 | 0xff000000u, ca));
   }
   /* the keyboard: the accent block slides under the focused key */
-  for (int i = 0; i < NK + search_key_row_len(SEARCH_KROWS); i++) {
+  for (int i = 0; i < NK + 3 + (plat_voice_available() ? 1 : 0); i++) {
     float x, y, w;
     key_rect(i, &x, &y, &w);
     hit_add(x, y, w, 66, key_focus, NULL, i, 0);
@@ -1028,7 +1046,7 @@ static void draw(void) {
     gfx_rrect(S.kfx.v, S.kfy.v, S.kfw.v, 66, 14, ACC);
     gfx_offset_pop();
   }
-  for (int i = 0; i < NK + search_key_row_len(SEARCH_KROWS); i++) {
+  for (int i = 0; i < NK + 3 + (plat_voice_available() ? 1 : 0); i++) {
     float x, y, w;
     key_rect(i, &x, &y, &w);
     int f = act && S.zone == 0 && key_at(S.kr, S.kc) == i;

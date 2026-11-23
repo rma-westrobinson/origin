@@ -1,0 +1,19 @@
+name = "origin-watchparty"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Two Durable Objects: one per party room (by code) and one inbox per account (invites, online devices).
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "PartyRoom"
+
+[[durable_objects.bindings]]
+name = "INBOXES"
+class_name = "Inbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PartyRoom", "Inbox"]
+
+# Optional shared secret (never put it here): npx wrangler secret put PARTY_KEY
+# When set, every request must carry the header "X-Party-Key: <secret>" (the app's Settings > Watch party > Server key).
