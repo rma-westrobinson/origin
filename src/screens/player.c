@@ -6339,7 +6339,8 @@ void player_mini_draw(void) {
     video_set_window(SB_W, SB_H, 0, 0);
     return;
   }
-  if (plat_pip_active()) { /* Android's own small window: the picture fills it, nothing else is drawn */
+  if (form_touch() && plat_pip_active()) { /* Android's own small window (phones and tablets only: a TV never makes
+                                              the JNI call): the picture fills it, nothing else is drawn */
     video_set_window(0, 0, SB_W, SB_H);
     gfx_hole(0, 0, SB_W, SB_H, 0, 1);
     return;
@@ -8833,8 +8834,9 @@ static void draw_tray(void) {
 void player_draw(void) {
   if (!P.open)
     return;
-  if (plat_pip_active())
-    return; /* Android's picture-in-picture window: the picture alone, no controls */
+  if (form_touch() && plat_pip_active())
+    return; /* Android's picture-in-picture window (phones and tablets only, as in app.c: a TV never makes the JNI
+               call): the picture alone, no controls */
   float a = P.in.v;
   gfx_opacity_push(a);
   if (P.live && P.artA.v < 0.999f) {

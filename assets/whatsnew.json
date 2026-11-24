@@ -1,10 +1,15 @@
 {
-  "version": "3.0.19",
+  "version": "3.0.20",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Startup fix for TVs",
-      "text": "A test build for the TV that did not open: the picture-in-picture check now runs on phones and tablets only."
+      "title": "Playback fix for TVs",
+      "text": "Pressing play on a TV no longer closes the app: the player's picture-in-picture check now runs on phones and tablets only."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Phones and tablets unchanged",
+      "text": "Picture-in-picture over other apps, the corner window, the cameras and the watch party work as before."
     }
   ]
 }
