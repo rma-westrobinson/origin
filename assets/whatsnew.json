@@ -1,20 +1,15 @@
 {
-  "version": "3.0.16",
+  "version": "3.0.17",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Video floats over other apps",
-      "text": "On your phone, leave the app while a video plays and it keeps going in a small floating window over whatever you open next."
+      "title": "Adding a camera says what went wrong",
+      "text": "On the camera page, a wrong or empty address now tells you so, and if the app does not answer the page says that. The card in the app no longer waits forever: after a minute and a half with no camera it says so, and it still finishes if the camera arrives late."
     },
     {
       "icon": "g_spark",
-      "title": "Play and pause that make sense",
-      "text": "The small window now shows play when the video is stopped and pause when it is playing. Tap it to show the buttons, then tap play to carry on. Tap it twice, or press the full screen button, to make it big."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Move and switch the small windows",
-      "text": "Drag the small window anywhere. With a film and a camera both in the corner, swipe sideways on your phone, or press Left or Right on the remote, to switch between them."
+      "title": "Updates ask once, and say why if they fail",
+      "text": "The in-app update now always shows the system's confirm screen, and if Android refuses it the message says why, including when the new build is signed with a different key."
     }
   ]
 }

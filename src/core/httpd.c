@@ -74,7 +74,10 @@ static const char *PK[] = {
   "Camera account user",
   "Camera account password",
   "Use the camera account made in the Tapo app. It is not your Tapo login. It stays on your TV.",
-  "The TV did not accept this camera."
+  "The TV did not accept this camera.",
+  "Enter the stream address.",
+  "The TV did not get all of it. Try again.",
+  "The TV did not answer. Go back to the app, keep this card open, and tap Save again."
 };
 #define NPK (int)(sizeof PK / sizeof PK[0])
 static struct {
@@ -337,12 +340,18 @@ static void camera_page(Buf *b) {
       "var s=document.getElementById(\"s\");function v(i){return document.getElementById(i).value.trim();}"
       "document.getElementById(\"b\").onclick=function(){s.textContent=");
   js(b, pt("Checking\xe2\x80\xa6"));
-  b_s(b, ";var x=new XMLHttpRequest();x.open(\"POST\",location.pathname+\"/set\");"
+  b_s(b, ";var x=new XMLHttpRequest();x.open(\"POST\",location.pathname+\"/set\");x.timeout=20000;"
          "x.setRequestHeader(\"Content-Type\",\"application/x-www-form-urlencoded\");"
-         "x.onload=function(){s.textContent=x.status===204?");
+         "x.onload=function(){var r=x.responseText;s.textContent=x.status===204?");
   js(b, pt("Saved. You can close this page."));
+  b_s(b, ":r===\"empty\"?");
+  js(b, pt("Enter the stream address."));
+  b_s(b, ":r===\"short\"?");
+  js(b, pt("The TV did not get all of it. Try again."));
   b_s(b, ":");
   js(b, pt("The TV did not accept this camera."));
+  b_s(b, ";};x.ontimeout=function(){s.textContent=");
+  js(b, pt("The TV did not answer. Go back to the app, keep this card open, and tap Save again."));
   b_s(b, ";};x.onerror=function(){s.textContent=");
   js(b, pt("Can\xe2\x80\x99t reach the TV"));
   b_s(b, ";};x.send(\"name=\"+encodeURIComponent(v(\"n\"))+\"&addr=\"+encodeURIComponent(v(\"a\"))+\"&user=\"+encodeURIComponent(v(\"u\"))"
@@ -354,9 +363,13 @@ static void clean_text(const char *in, char *out, size_t cap);
 static HttpdCamera camPend; /* (under mu) a camera the phone saved, waiting for the main thread */
 static int camHas;
 #define CAM_BODY_MAX 2048
+static void camera_bad(int fd, int code, const char *why) {
+  fprintf(stderr, "[httpd] camera: refused (%d, %s)\n", code, why);
+  reply(fd, code, "Content-Type: text/plain\r\n", why, strlen(why));
+}
 static void camera_set(int fd, const char *got, size_t have, long want) {
   if (want <= 0 || want > CAM_BODY_MAX) {
-    reply(fd, want > 0 ? 413 : 400, NULL, NULL, 0);
+    camera_bad(fd, want > 0 ? 413 : 400, want > 0 ? "big" : "short");
     return;
   }
   char t[CAM_BODY_MAX + 1];
@@ -371,29 +384,42 @@ static void camera_set(int fd, const char *got, size_t have, long want) {
     n += (size_t)r;
   }
   t[n] = 0;
+  if (n != (size_t)want) { /* the rest of the body never came (the phone stopped, or the connection dropped) */
+    camera_bad(fd, 400, "short");
+    return;
+  }
   HttpdCamera c;
   memset(&c, 0, sizeof c);
   char raw[300];
   qparam(t, "name", raw, sizeof raw);
   clean_text(raw, c.name, sizeof c.name);
-  qparam(t, "addr", c.addr, sizeof c.addr); /* an address and a password as typed: no cleaning that would change them */
+  qparam(t, "addr", c.addr, sizeof c.addr);
   qparam(t, "user", c.user, sizeof c.user);
   qparam(t, "pass", c.pass, sizeof c.pass);
-  const char *fields[3] = { c.addr, c.user, c.pass };
-  for (int i = 0; i < 3; i++)
+  /* the address: spaces and control characters are not part of one (a keyboard's autocorrect adds them), so they are
+     dropped, not refused; the account's user and password are kept exactly as typed, and only control characters
+     (which no keyboard types) make them refused */
+  size_t o = 0;
+  for (size_t i = 0; c.addr[i]; i++)
+    if ((unsigned char)c.addr[i] > 0x20 && (unsigned char)c.addr[i] != 0x7f)
+      c.addr[o++] = c.addr[i];
+  c.addr[o] = 0;
+  const char *fields[2] = { c.user, c.pass };
+  for (int i = 0; i < 2; i++)
     for (const char *p = fields[i]; *p; p++)
-      if ((unsigned char)*p < 0x20 || (i == 0 && *p == ' ')) {
-        reply(fd, 400, NULL, NULL, 0);
+      if ((unsigned char)*p < 0x20) {
+        camera_bad(fd, 400, "control");
         return;
       }
-  if (n != (size_t)want || !c.addr[0]) {
-    reply(fd, 400, NULL, NULL, 0);
+  if (!c.addr[0]) {
+    camera_bad(fd, 400, "empty");
     return;
   }
   pthread_mutex_lock(&mu);
   camPend = c;
   camHas = 1;
   pthread_mutex_unlock(&mu);
+  fprintf(stderr, "[httpd] camera: taken in (%zu bytes)\n", n);
   reply(fd, 204, NULL, NULL, 0);
 }
 int httpd_take_camera(HttpdCamera *out) {
@@ -522,6 +548,7 @@ static void reply(int fd, int code, const char *extra, const char *body, size_t 
                    : code == 302 ? "Found"
                    : code == 400 ? "Bad Request"
                    : code == 404 ? "Not Found"
+                   : code == 413 ? "Payload Too Large"
                                  : "Error";
   char h[1024];
   int n = snprintf(h, sizeof h, "HTTP/1.1 %d %s\r\n%s%sContent-Length: %zu\r\nConnection: close\r\n\r\n", code, st,
@@ -602,11 +629,22 @@ static void handle(int fd) {
   req[got] = 0;
   int post = !strncmp(req, "POST ", 5);
   char *he = strstr(req, "\r\n\r\n"), *cl = strcasestr(req, "\ncontent-length:");
-  size_t bodyAt = he ? (size_t)(he - req) + 4 : got;
+  size_t hl = 4; /* the blank line that ends the headers: CRLF CRLF, or a bare LF LF from a client that sends no CRs */
+  char *he2 = strstr(req, "\n\n");
+  if (!he || (he2 && he2 < he)) {
+    he = he2;
+    hl = 2;
+  }
+  size_t bodyAt = he ? (size_t)(he - req) + hl : got;
   long want = cl && (!he || cl < he) ? atol(cl + 16) : 0;
   char *sp1 = strchr(req, ' '), *sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
   if (!sp1 || !sp2 || (strncmp(req, "GET ", 4) && !post)) {
     reply(fd, 404, NULL, NULL, 0);
+    return;
+  }
+  if (post && !he) { /* a request whose headers never ended inside MAX_REQ (or a client that stopped): nothing to read a body from */
+    fprintf(stderr, "[httpd] POST with no end of headers after %zu bytes\n", got);
+    reply(fd, 400, "Content-Type: text/plain\r\n", "short", 5);
     return;
   }
   *sp2 = 0;

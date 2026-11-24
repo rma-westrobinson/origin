@@ -79,6 +79,7 @@ void cam_remove(int i) {
 unsigned cam_generation(void) {
   return gen;
 }
+static int saveFailed;
 void cam_poll(void) {
   HttpdCamera h;
   if (!httpd_take_camera(&h))
@@ -89,7 +90,14 @@ void cam_poll(void) {
   snprintf(c.addr, sizeof c.addr, "%s", h.addr);
   snprintf(c.user, sizeof c.user, "%s", h.user);
   snprintf(c.pass, sizeof c.pass, "%s", h.pass);
-  cam_save(-1, &c);
+  saveFailed = cam_save(-1, &c) < 0; /* (-1: the list is full) */
+  fprintf(stderr, "[cameras] a camera from the phone: %s\n", saveFailed ? "not saved, the list is full" : "saved");
+}
+int cam_save_failed(void) {
+  return saveFailed;
+}
+void cam_save_failed_clear(void) {
+  saveFailed = 0;
 }
 
 /* user and password go into the address: anything but unreserved characters is percent-encoded */

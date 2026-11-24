@@ -233,10 +233,23 @@ void cameras_edit(int idx) {
 
 /* ==== the phone's page ==== */
 static unsigned phoneGen;
+static double phoneAt;
+static int phoneSaid; /* the card has said it is not working out (once) */
+#define PHONE_WAIT 90.0 /* seconds with no camera before the card says so (it goes on waiting, a late one still ticks) */
 static int phone_check(void *ud) {
   (void)ud;
   cam_poll();
-  return cam_generation() != phoneGen;
+  if (cam_generation() != phoneGen)
+    return 1;
+  if (cam_save_failed() && phoneSaid != 2) { /* the phone sent one, the TV could not keep it */
+    phoneSaid = 2;
+    qrcard_fail(T("The camera could not be saved"), T("The list of cameras is full. Remove one in Settings \xe2\x80\xba Cameras, then add it again"));
+  } else if (!phoneSaid && app_now() - phoneAt > PHONE_WAIT) {
+    phoneSaid = 1;
+    qrcard_fail(T("No camera has arrived"),
+                T("Nothing was saved. On the page, check the stream address and tap Save, with this card still open"));
+  }
+  return 0;
 }
 void cameras_add_phone(void) {
   if (cam_count() >= CAM_MAX) {
@@ -244,13 +257,18 @@ void cameras_add_phone(void) {
     return;
   }
   char url[600];
-  httpd_url("/camera", url, sizeof url);
+  int haveUrl = httpd_url("/camera", url, sizeof url); /* 0: no network address, or the server's port is taken */
   phoneGen = cam_generation();
+  phoneAt = app_now();
+  phoneSaid = 0;
+  cam_save_failed_clear();
   QrCardOpts o;
   memset(&o, 0, sizeof o);
   o.title = T("Add a camera");
   o.sub = form_touch() ? T("Open the page and type the camera's stream address and its camera account")
                        : T("Scan with your phone and type the camera's stream address and its camera account");
+  if (!haveUrl)
+    o.sub = T("The page could not start: this device has no Wi-Fi address, or port 8099 is in use. Connect to Wi-Fi and try again");
   o.url = url;
   o.check = phone_check;
   o.doneTitle = T("Camera saved");

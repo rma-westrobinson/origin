@@ -20,6 +20,8 @@ typedef struct {
 
 void qrcard_show(const QrCardOpts *o);
 void qrcard_close(void);
+/* the card's words become an error (already translated); it stays open and keeps checking, so a late arrival still ticks */
+void qrcard_fail(const char *title, const char *sub);
 void qrcard_note(const char *msg); /* desktop: a line under the paste button, how the paste went */
 
 /* the ready-made cards */

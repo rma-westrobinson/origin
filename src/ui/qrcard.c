@@ -311,6 +311,16 @@ static void draw(void) {
   gfx_opacity_pop();
 }
 static Screen card = { NULL, NULL, key, tick, draw, NULL, NULL, NULL };
+/* what the card was waiting for has not come (or went wrong): its words change to say so, and it goes on waiting, so
+   the tick still comes if the thing arrives late. Said once is enough; a card already ticked is left alone. */
+void qrcard_fail(const char *title, const char *sub) {
+  if (!Q.open || Q.closing || Q.done)
+    return;
+  snprintf(Q.title, sizeof Q.title, "%s", title ? title : "");
+  snprintf(Q.sub, sizeof Q.sub, "%s", sub ? sub : "");
+  layout();
+  sglass_bake(&glass, SB_W / 2 - CW / 2, SB_H / 2 - Q.h / 2, CW, Q.h); /* (the height changed with the words) */
+}
 void qrcard_show(const QrCardOpts *o) {
   if (Q.open)
     finish(); /* one card at a time: the one there is replaced */

@@ -15,6 +15,8 @@ int cam_save(int i, const Camera *c); /* i < 0: added; returns its index, or -1 
 void cam_remove(int i);
 unsigned cam_generation(void); /* bumps when the list changes (from the phone too) */
 void cam_poll(void); /* takes in a camera the phone saved; from the main thread, a few times a second */
+int cam_save_failed(void); /* the last camera taken in from the phone could not be saved (the list is full) */
+void cam_save_failed_clear(void);
 /* the address to play: "rtsp://" put in front when missing, "/stream1" when the address names no path, and the
    account's user and password put in (percent-encoded) unless the address already has them; 0 when there is no address */
 int cam_url(const Camera *c, char *out, size_t cap);
