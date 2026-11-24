@@ -2522,7 +2522,7 @@ void app_away_tick(void) {
      apps and must keep playing. The leave is taken (so it does not fire later, once the window is back), and nothing is
      let go while the window is up; if the window never comes (Home, the screen off) the pending away is handled then. */
   int leave = app_away_take_leave();
-  int pipUp = plat_pip_active();
+  int pipUp = form_touch() && plat_pip_active();
   if (!pipUp && (leave || (app_away() && !awayHandled))) {
     int stream = player_away();
     camview_close(); /* a camera is let go: its connection and its decoder */
@@ -2856,7 +2856,7 @@ void app_draw(void) {
     saver_draw();
     return;
   }
-  if (plat_pip_active() && player_mini_visible()) {
+  if (form_touch() && plat_pip_active() && player_mini_visible()) {
     player_mini_draw(); /* Android's small window over other apps, the corner film in it: the picture alone, no page */
     return;
   }

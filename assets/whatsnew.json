@@ -1,10 +1,10 @@
 {
-  "version": "3.0.18",
+  "version": "3.0.19",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Camera page shows just an IP address",
-      "text": "On the camera page the stream address example is now just an IP address, like 192.168.1.50. You do not type rtsp:// or the port: the app adds them."
+      "title": "Startup fix for TVs",
+      "text": "A test build for the TV that did not open: the picture-in-picture check now runs on phones and tablets only."
     }
   ]
 }
