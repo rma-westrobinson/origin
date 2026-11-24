@@ -86,11 +86,26 @@ typedef struct {
 static Region reg[MAXREG];
 static int nreg;
 static int movingNow;
+static struct {
+  float x, y, w, h;
+  DragFn fn;
+} dragR; /* the one draggable window of this frame (layout units, through the transform) */
 void touch_note_moving(void) {
   movingNow = 1;
 }
 void touch_begin_frame(void) {
   nreg = 0;
+  dragR.fn = NULL;
+}
+void touch_drag_region(float x, float y, float w, float h, DragFn fn) {
+  float x1 = x + w, y1 = y + h;
+  gfx_xform_point(&x, &y);
+  gfx_xform_point(&x1, &y1);
+  dragR.x = x;
+  dragR.y = y;
+  dragR.w = x1 - x;
+  dragR.h = y1 - y;
+  dragR.fn = fn;
 }
 void touch_region(float x, float y, float w, float h, Scroller *sx, Scroller *sy) {
   if (nreg >= MAXREG)
@@ -127,6 +142,8 @@ static int reg_has(const Region *r, float x, float y) {
 #define NS 8
 static struct {
   int down, moved, held, caught, axis; /* axis 0 x, 1 y */
+  int pdrag, pdragging; /* the finger landed on the draggable window; it is dragging it */
+  DragFn pfn;
   float x0, y0, x, y;
   double t0;
   Hit hit;
@@ -197,6 +214,10 @@ void touch_down(float x, float y) {
     F.hit = *h;
     F.hasHit = 1;
   }
+  if (dragR.fn && x >= dragR.x && x < dragR.x + dragR.w && y >= dragR.y && y < dragR.y + dragR.h) {
+    F.pdrag = 1;
+    F.pfn = dragR.fn;
+  }
   for (int i = nreg - 1; i >= 0; i--)
     if (reg_has(&reg[i], x, y)) { /* a finger on a moving page stops it, and is no tap */
       Scroller *s[2] = { reg[i].sx, reg[i].sy };
@@ -210,6 +231,15 @@ void touch_down(float x, float y) {
   app_touch();
 }
 static void begin_drag(void) {
+  if (F.pdrag && F.pfn) { /* the window goes with the finger (from where it is now: no jump by the slop) */
+    F.pdragging = 1;
+    F.x0 = F.x;
+    F.y0 = F.y;
+    F.ns = 0;
+    sample(F.x);
+    F.pfn(0, 0, 0, 0);
+    return;
+  }
   float dx = F.x - F.x0, dy = F.y - F.y0;
   F.axis = fabsf(dy) >= fabsf(dx) ? 1 : 0;
   for (int pass = 0; pass < 2 && !F.drag; pass++) {
@@ -259,6 +289,11 @@ void touch_move(float x, float y) {
       begin_drag();
     app_touch();
   }
+  if (F.pdragging) {
+    sample(x);
+    F.pfn(1, x - F.x0, y - F.y0, 0);
+    return;
+  }
   if (!F.drag)
     return;
   float p = F.axis ? y : x, p0 = F.axis ? F.y0 : F.x0;
@@ -287,6 +322,12 @@ void touch_up(float x, float y) {
     return;
   F.x = x;
   F.y = y;
+  if (F.pdragging) {
+    F.pfn(2, x - F.x0, y - F.y0, velocity());
+    F.pdragging = F.pdrag = 0;
+    F.down = 0;
+    return;
+  }
   if (F.drag) {
     Scroller *s = F.drag;
     s->drag = 0;
@@ -300,6 +341,8 @@ void touch_up(float x, float y) {
   F.down = 0;
 }
 void touch_cancel(void) {
+  if (F.pdragging && F.pfn)
+    F.pfn(3, 0, 0, 0);
   if (F.drag) {
     F.drag->drag = 0;
     F.drag->vel = 0;

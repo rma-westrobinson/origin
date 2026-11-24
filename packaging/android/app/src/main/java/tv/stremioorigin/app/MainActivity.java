@@ -134,14 +134,24 @@ public class MainActivity extends SDLActivity {
     /* ...except in the system's picture-in-picture window (below), where the film keeps playing */
     @Override protected void onPause() {
         super.onPause();
+        /* armed (a film plays, pipW > 0): the system may be taking the activity into the PiP window without calling
+           onUserLeaveHint (API 31+ enters on its own); the film must not be paused in that case. onStop pauses it if
+           the window did not come. */
+        if (touch && !pipKeep() && pipW > 0 && pipCapable() && !isFinishing()) pipEntering = true;
         if (touch && !pipKeep()) SbPlayer.pause();
         /* SDL paused the app's own loop with the activity: in the PiP window the loop must run on (it hides the controls
            and lays out the small window), so SDL is told it is resumed again */
         else if (touch) super.onResume();
     }
     /* (the PiP window closed with its X stops the activity too: the film is paused unless the window is still up) */
-    @Override protected void onStop() { super.onStop(); if (touch && !(pipKeep() && isInPictureInPictureMode())) SbPlayer.pause(); }
-    @Override protected void onResume() { super.onResume(); SbUpdater.onResume(this); if (touch && film == 1) applyFilm(true); }
+    @Override protected void onStop() {
+        super.onStop();
+        if (!touch) return;
+        boolean inPip = Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode();
+        if (!inPip) pipEntering = false;   // (the window never came: it was Home, the screen off, or a refusal)
+        if (!(pipKeep() && inPip)) SbPlayer.pause();
+    }
+    @Override protected void onResume() { super.onResume(); pipEntering = false; SbUpdater.onResume(this); if (touch && film == 1) applyFilm(true); }
 
     // ---- Android's own picture-in-picture (phones and tablets): the film floats over other apps ----
     /* the C side arms it (app.c) while a film plays full screen: the picture's size, for the window's shape; 0 = not now */
@@ -167,7 +177,7 @@ public class MainActivity extends SDLActivity {
         pipW = w; pipH = h;
         a.runOnUiThread(() -> { try { a.setPictureInPictureParams(a.pipParams()); } catch (Exception e) { Log.w(TAG, "pip params", e); } });
     }
-    public static int uiPipActive() { return pipOn ? 1 : 0; }
+    public static int uiPipActive() { return pipKeep() ? 1 : 0; }   // (also while the window is coming: the C side must not pause the film for the leave)
     @Override protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         if (!pipCapable() || pipW <= 0 || isInPictureInPictureMode()) return;

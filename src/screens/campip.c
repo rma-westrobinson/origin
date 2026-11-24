@@ -6,11 +6,13 @@
 #include "core/i18n.h"
 #include "core/keys.h"
 #include "core/store.h"
+#include "core/touch.h"
 #include "screens/cameras.h"
 #include "screens/phone.h"
 #include "screens/player.h"
 #include "core/video.h"
 #include "ui/widgets.h"
+#include "ui/icon.h"
 #include <stdlib.h>
 #include "ui/gfx.h"
 #include "ui/text.h"
@@ -27,6 +29,40 @@ static struct {
 } C;
 static int F; /* the window the remote's focus is on: 0 none, 1 the film's, 2 the camera's (pip_focus_*) */
 static int lastAud = -1, duck = 100, duckHm;
+
+/* ---- what both corner windows share (the film's and the camera's): the controls a tap reveals (play/pause, full
+   screen), the second tap that opens the window full screen, the finger that drags it, and the flick that swaps the
+   windows. Only one window shows at a time, so one set of state serves both. ---- */
+#define CTL_S 4.0 /* the controls stay this long after a tap */
+#define TAP_DBL_S 0.4 /* a second tap inside this opens the window full screen */
+static double ctlAt = -100, tapAt = -100;
+static int posSet; /* the window was dragged: it stays where it was dropped (a phone) */
+static float posX, posY;
+static float gx, gy, gw, gh; /* where the window was drawn last, for a finger's drag */
+static struct {
+  float sx, sy, px, py;
+  int hadPos;
+} G;
+static void pos_clamp(float *x, float *y, float w, float h) {
+  float x0 = 4, y0 = form_touch() ? phone_top_inset() : 4;
+  if (*x > SB_W - w - 4)
+    *x = SB_W - w - 4;
+  if (*x < x0)
+    *x = x0;
+  if (*y > SB_H - h - 4)
+    *y = SB_H - h - 4;
+  if (*y < y0)
+    *y = y0;
+}
+/* the place a dragged window keeps (the default corner when it was never dragged, and over a full-screen film) */
+void pipui_place(float *x, float *y, float w, float h) {
+  if (!posSet || player_open())
+    return;
+  float px = posX, py = posY;
+  pos_clamp(&px, &py, w, h);
+  *x = px;
+  *y = py;
+}
 
 #define PIP_W 480.0f
 #define PIP_H 270.0f
@@ -274,9 +310,7 @@ void campip_draw(void) {
     gfx_rrect(x, y, w, h, 16, RGBA(12, 12, 16, 245));
     float cx = x + w / 2, cy = y + h / 2;
     if (C.paused) {
-      float bw = w / 48, bh = w / 12;
-      gfx_rrect(cx - bw * 1.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
-      gfx_rrect(cx + bw * 0.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
+      /* (frozen: the play button is drawn by campip_focus_draw) */
     } else if (C.err) {
       text_draw(T("No picture"), cx, cy - text_line_height(26) / 2.0f - 14, 26, 700, WHITE_A(240), 0, w - 32, ALIGN_CENTER);
       text_draw(T("Play to try again"), cx, cy + 14, 20, 400, WHITE_A(170), 0, w - 32, ALIGN_CENTER);
@@ -296,7 +330,6 @@ void campip_draw(void) {
     gfx_rrect(x + (w - pw) / 2, y + h - 54, pw, 40, 20, BLACK_A(170));
     text_draw(b, x + (w - pw) / 2 + 18, y + h - 34 - text_line_height(22) / 2.0f, 22, 700, WHITE_A(240), 0, pw, ALIGN_LEFT);
   }
-  hit_act(x, y, w, h, expand, 0, 0);
   campip_focus_draw(2, x, y, w, h);
 }
 /* Play/Pause freezes the camera (its stream is let go, the window keeps its place; Play connects again, live: a camera's
@@ -412,7 +445,9 @@ int pip_focus_key(int k) {
     return 1;
   case K_LEFT:
   case K_RIGHT:
-    if (F == 2)
+    if (C.open && player_mini())
+      campip_swap(); /* both windows are alive: Left and Right go between them (always on) */
+    else if (F == 2)
       campip_step(k == K_RIGHT ? 1 : -1);
     else
       F = 0;
@@ -444,7 +479,69 @@ int pip_focus_key(int k) {
     return 0;
   }
 }
-/* ---- the buttons a finger has on a corner window (a phone): close, camera, sound, the other window ---- */
+/* ---- the controls on a corner window: a tap (a click) shows them for a few seconds, a second tap inside 0.4 s opens the
+   window full screen; the remote's focus shows them as long as it stays. They are play/pause, full screen, and on a phone
+   close, the camera's own buttons and the other window. A finger drags the window; a quick flick sideways swaps the
+   film's window and the camera's (the same as Left and Right on a remote). ---- */
+static void pip_full(int which) {
+  F = 0;
+  ctlAt = tapAt = -100;
+  if (which == 1)
+    player_mini_expand();
+  else
+    expand(0, 0);
+}
+void pipui_tap(int which, int b) {
+  (void)b;
+  double n = app_now();
+  if (n - tapAt < TAP_DBL_S) {
+    pip_full(which);
+    return;
+  }
+  tapAt = n;
+  ctlAt = n;
+}
+static void pipui_pp(int which, int b) {
+  (void)b;
+  ctlAt = app_now();
+  if (which == 1)
+    player_mini_key(K_PLAYPAUSE);
+  else
+    campip_key(K_PLAYPAUSE);
+}
+static void pipui_full(int which, int b) {
+  (void)b;
+  pip_full(which);
+}
+static void pip_gest(int phase, float dx, float dy, float vx) {
+  if (phase == 0) {
+    G.sx = gx;
+    G.sy = gy;
+    G.hadPos = posSet;
+    G.px = posX;
+    G.py = posY;
+    posSet = 1;
+    posX = gx;
+    posY = gy;
+    tapAt = -100;
+    return;
+  }
+  if (phase == 1) {
+    float x = G.sx + dx, y = G.sy + dy;
+    pos_clamp(&x, &y, gw, gh);
+    posX = x;
+    posY = y;
+    return;
+  }
+  int flick = phase == 2 && C.open && player_mini() && fabsf(vx) > 700 && fabsf(dx) > 36 && fabsf(dx) > 2 * fabsf(dy);
+  if (flick || phase == 3) { /* a flick is a swap, not a move: the window stays where it was */
+    posSet = G.hadPos;
+    posX = G.px;
+    posY = G.py;
+  }
+  if (flick)
+    campip_swap();
+}
 static void tb_close(int a, int b) {
   (void)b;
   if (a == 1)
@@ -478,26 +575,45 @@ static float pill(float x, float y, float h, const char *label, HitFn fn, int a)
   return w;
 }
 void campip_focus_draw(int which, float x, float y, float w, float h) {
+  hit_act(x, y, w, h, pipui_tap, which, 0); /* the window itself (first: what is drawn on it is on top of it) */
+  int frozen = which == 2 ? C.paused : player_mini_paused();
+  int shown = (F == which && pip_focused()) || app_now() - ctlAt < CTL_S;
   if (form_touch()) {
-    float bh = 30, m = 6;
-    pill(x + w - m - bh, y + m, bh, "x", tb_close, which); /* (the film's: closes it; the camera's: lets it go) */
-    float bx = x + m, by = y + h - bh - m;
-    if (which == 2) {
-      if (cam_count() > 1) {
-        bx += pill(bx, by, bh, "<", tb_step, -1) + 4;
-        bx += pill(bx, by, bh, ">", tb_step, 1) + 4;
-      }
-      bx += pill(bx, by, bh, sound_on() && cam_vol() > 0 ? T("Sound") : T("Muted"), tb_sound, 0) + 4;
-    }
-    if (which == 2 ? player_mini() : (campip_active() || cam_count() > 0))
-      pill(x + w - m - 60, by, bh, which == 2 ? T("Film") : T("Camera"), tb_swap, 0);
-    return;
+    gx = x;
+    gy = y;
+    gw = w;
+    gh = h;
+    touch_drag_region(x, y, w, h, pip_gest);
   }
-  if (F != which)
+  if (shown || frozen) { /* play when it is stopped, pause when it plays (a frozen window always offers play) */
+    float d = fminf(56.0f, h * 0.4f), cx = x + w / 2, cy = y + h / 2;
+    gfx_circle(cx, cy, d / 2, BLACK_A(150));
+    icon_draw(frozen ? "p_play" : "p_pause", cx - d * 0.3f, cy - d * 0.3f, d * 0.6f, WHITE_A(245));
+    hit_act(cx - d / 2 - 4, cy - d / 2 - 4, d + 8, d + 8, pipui_pp, which, 0);
+  }
+  if (shown) {
+    float bh = 30, m = 6, by = y + h - bh - m;
+    pill(x + m, y + m, bh, T("Full screen"), pipui_full, which);
+    if (form_touch()) {
+      pill(x + w - m - bh, y + m, bh, "x", tb_close, which); /* (the film's: closes it; the camera's: lets it go) */
+      float bx = x + m;
+      if (which == 2) {
+        if (cam_count() > 1) {
+          bx += pill(bx, by, bh, "<", tb_step, -1) + 4;
+          bx += pill(bx, by, bh, ">", tb_step, 1) + 4;
+        }
+        bx += pill(bx, by, bh, sound_on() && cam_vol() > 0 ? T("Sound") : T("Muted"), tb_sound, 0) + 4;
+      }
+      if (which == 2 ? player_mini() : (campip_active() || cam_count() > 0))
+        pill(x + w - m - 60, by, bh, which == 2 ? T("Film") : T("Camera"), tb_swap, 0);
+    }
+  }
+  if (form_touch() || F != which)
     return;
   gfx_ring(x - 5, y - 5, w + 10, h + 10, 20, 4, acc_a(1.0f));
+  int both = C.open && player_mini();
   int other = which == 2 ? player_mini() : (C.open || cam_count() > 0);
-  int rows = 2 + (which == 2 && cam_count() > 1) + 0;
+  int rows = 3 + ((which == 2 && cam_count() > 1) || both);
   float ph = rows * 48 + 16, py = y - 12 - ph;
   if (py < 8)
     py = y + h + 12; /* (a window at the top of the screen: the keys go under it) */
@@ -505,12 +621,15 @@ void campip_focus_draw(int which, float x, float y, float w, float h) {
   float ry = py + 32;
   key_hint(x + 18, ry, K_OK, T("Full screen"), WHITE_A(240), 0);
   ry += 48;
-  if (which == 2 && cam_count() > 1) {
+  text_draw(T("Play or Pause key: play and pause"), x + 18, ry - text_line_height(22) / 2.0f, 22, 600, WHITE_A(240), 0,
+            w - 36, ALIGN_LEFT);
+  ry += 48;
+  if (both || (which == 2 && cam_count() > 1)) {
     float kw = key_hint(x + 18, ry, K_LEFT, "", WHITE_A(240), 0);
-    key_hint(x + 18 + kw + 8, ry, K_RIGHT, T("Camera"), WHITE_A(240), 0);
+    key_hint(x + 18 + kw + 8, ry, K_RIGHT, both ? (which == 2 ? T("Film") : T("Camera")) : T("Camera"), WHITE_A(240), 0);
     ry += 48;
   }
   float kw = key_hint(x + 18, ry, K_UP, T("Back"), WHITE_A(240), 0);
-  if (other)
+  if (other && !both)
     key_hint(x + 18 + kw + 28, ry, K_DOWN, which == 2 ? T("Film") : T("Camera"), WHITE_A(240), 0);
 }

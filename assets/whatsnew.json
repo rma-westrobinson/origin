@@ -1,20 +1,20 @@
 {
-  "version": "3.0.15",
+  "version": "3.0.16",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Corner window: one way back",
-      "text": "Press OK twice from anywhere to focus the corner window. A ring and a key panel show it, then press OK for full screen. The Blue key works too, on remotes that have one."
-    },
-    {
-      "icon": "wn_people",
-      "title": "Watch party is ready",
-      "text": "The watch party server is built in now. Play a film, open Watch party, and choose Start a watch party."
+      "title": "Video floats over other apps",
+      "text": "On your phone, leave the app while a video plays and it keeps going in a small floating window over whatever you open next."
     },
     {
       "icon": "g_spark",
-      "title": "Microphone in one press",
-      "text": "On the search keyboard, press Back from any key to jump to the microphone."
+      "title": "Play and pause that make sense",
+      "text": "The small window now shows play when the video is stopped and pause when it is playing. Tap it to show the buttons, then tap play to carry on. Tap it twice, or press the full screen button, to make it big."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Move and switch the small windows",
+      "text": "Drag the small window anywhere. With a film and a camera both in the corner, swipe sideways on your phone, or press Left or Right on the remote, to switch between them."
     }
   ]
 }

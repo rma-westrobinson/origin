@@ -24,6 +24,7 @@ void player_mini_draw(void); /* once a frame after the page: the corner window c
 int player_mini_key(int k); /* a media key (play, pause, stop) for the corner's film; 1 when used */
 int player_mini_close(void); /* closes the corner's film; 1 when there was one */
 int player_mini_visible(void); /* it plays in the corner and its window shows (not hidden behind a camera in the corner) */
+int player_mini_paused(void); /* the corner's film is paused (its window shows play, not pause) */
 void player_mini_hide(int hide); /* hides the corner's film (paused, silent, its window out of sight) or brings it back */
 void player_mini_expand(void); /* the corner's film full screen again (OK on the focused window) */
 void player_mini_rect(float *x, float *y, float *w, float *h); /* where its window is */

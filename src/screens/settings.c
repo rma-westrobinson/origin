@@ -410,8 +410,6 @@ static int cams_opts(void) {
     set_s(&camS[n++], "camVol", "Camera volume", "Up and Down in the full screen view; the channel keys on the focused corner window", SVOL, 10, "100");
     set_s(&camS[n++], "camFilmMix", "Film volume under the camera",
           "When the camera has sound over a film playing full screen, the film is this loud, so the camera is heard", CAMMIX, 6, "40");
-    set_act(&camS[n++], "__camSwap", "Switch the film and the camera in the corner",
-            "One shows at a time, the other is kept and comes back. Down on the focused window does the same");
   }
   return n;
 }
@@ -1550,8 +1548,6 @@ static int key(int k) {
         if (!strcmp(op->k, "__camPip")) {
           campip_toggle();
           cams_rows_again(); /* (its row says close now, or float) */
-        } else if (!strcmp(op->k, "__camSwap")) {
-          campip_swap();
         } else if (!strcmp(op->k, "__camPhone"))
           cameras_add_phone();
         else if (!strcmp(op->k, "__camTv"))

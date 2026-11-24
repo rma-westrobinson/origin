@@ -2518,7 +2518,12 @@ int app_away_take_leave(void) {
 }
 
 void app_away_tick(void) {
-  if (app_away_take_leave() || (app_away() && !awayHandled)) {
+  /* Android's picture-in-picture: the activity pauses and SDL reports a leave, but the film floats on over the other
+     apps and must keep playing. The leave is taken (so it does not fire later, once the window is back), and nothing is
+     let go while the window is up; if the window never comes (Home, the screen off) the pending away is handled then. */
+  int leave = app_away_take_leave();
+  int pipUp = plat_pip_active();
+  if (!pipUp && (leave || (app_away() && !awayHandled))) {
     int stream = player_away();
     camview_close(); /* a camera is let go: its connection and its decoder */
     campip_close();
@@ -2613,10 +2618,11 @@ void app_tick(float dt) {
   } /* into the player: one faint sound, then the film has the audio alone; a phone turns sideways for it, its bars go,
        and the canvas is the TV's (back upright after) */
   if (form_touch()) {
-    /* Android's own picture-in-picture: armed while a film plays full screen (the activity enters the small window when
+    /* Android's own picture-in-picture: armed while a film plays, full screen or in the corner window (the activity enters the small window when
        the user leaves the app), with the picture's shape for the window */
     static int armW = -1, armH = -1;
-    int ok = player_live() && !player_paused() && video_width() > 0 && video_height() > 0;
+    int playing = (player_live() && !player_paused()) || (player_mini_visible() && video_state() == VID_PLAYING);
+    int ok = playing && video_width() > 0 && video_height() > 0;
     int w = ok ? video_width() : 0, h = ok ? video_height() : 0;
     if (w != armW || h != armH) {
       armW = w;
@@ -2848,6 +2854,10 @@ void app_draw(void) {
     toast_draw();
     party_draw();
     saver_draw();
+    return;
+  }
+  if (plat_pip_active() && player_mini_visible()) {
+    player_mini_draw(); /* Android's small window over other apps, the corner film in it: the picture alone, no page */
     return;
   }
   if (saver_covers()) {

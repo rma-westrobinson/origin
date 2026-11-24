@@ -26,6 +26,12 @@ void touch_begin_frame(void); /* with hit_begin: this frame's regions replace th
 void touch_region(float x, float y, float w, float h, Scroller *sx,
                   Scroller *sy); /* layout units, through the transform */
 
+/* A window a finger may drag about (the corner window, screens/campip.c): registered while it draws, like a region.
+   A finger that lands on it and moves is not a scroll and not a tap: fn gets phase 0 (it began), 1 (moving, dx and dy
+   from where it began), 2 (lifted: dx, dy, and vx the horizontal speed in dp per second) or 3 (cancelled). */
+typedef void (*DragFn)(int phase, float dx, float dy, float vx);
+void touch_drag_region(float x, float y, float w, float h, DragFn fn);
+
 extern unsigned touch_evt_ms; /* the SDL timestamp (ms) of the finger event being handled, for the dev log */
 void touch_down(float x, float y); /* layout units */
 void touch_move(float x, float y);

@@ -6218,6 +6218,7 @@ static void pip_rect(float *x, float *y, float *w, float *h) {
     float m = 12.0f;
     *x = app_rtl() ? m : SB_W - m - *w;
     *y = phone_bottom() - m - *h;
+    pipui_place(x, y, *w, *h); /* (where a finger dropped it, when it was dragged) */
     return;
   }
   *w = fminf(PIP_W, SB_W * 0.4f); /* (a phone's narrow canvas: smaller) */
@@ -6306,6 +6307,9 @@ static void mini_expand(int a, int b) {
 void player_mini_expand(void) {
   mini_expand(0, 0);
 }
+int player_mini_paused(void) {
+  return P.open && P.mini && paused();
+}
 int player_mini_visible(void) {
   return P.open && P.mini && !P.miniHid;
 }
@@ -6335,19 +6339,18 @@ void player_mini_draw(void) {
     video_set_window(SB_W, SB_H, 0, 0);
     return;
   }
+  if (plat_pip_active()) { /* Android's own small window: the picture fills it, nothing else is drawn */
+    video_set_window(0, 0, SB_W, SB_H);
+    gfx_hole(0, 0, SB_W, SB_H, 0, 1);
+    return;
+  }
   float x, y, w, h;
   pip_rect(&x, &y, &w, &h);
   video_set_window(x, y, w, h);
   gfx_shadow(x, y + 10, w, h, 18, 36, BLACK_A(170));
   gfx_hole(x, y, w, h, 16, 1);
   gfx_ring(x, y, w, h, 16, 2, WHITE_A(70));
-  if (paused()) {
-    float bw = w / 48, bh = w / 12, cx = x + w / 2, cy = y + h / 2;
-    gfx_rrect(cx - bw * 1.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
-    gfx_rrect(cx + bw * 0.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
-  }
-  campip_focus_draw(1, x, y, w, h);
-  hit_act(x, y, w, h, mini_expand, 0, 0);
+  campip_focus_draw(1, x, y, w, h); /* its tap, its play/pause and full screen controls, the remote's ring */
 }
 /* the remote's media keys act on the corner's film; 1 when the key was used */
 int player_mini_key(int k) {

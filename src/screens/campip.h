@@ -25,5 +25,7 @@ int pip_focus_summon(void); /* the Blue key, from any screen: the focus goes to 
 int pip_dblok_armed(void); /* a window shows in the corner and has no focus: OK waits for a possible double-click */
 int pip_focus_key(int k); /* a key while a window has the focus; 1 when used */
 int pip_focused(void);
-void campip_focus_draw(int which, float x, float y, float w, float h); /* which: 1 the film's window, 2 the camera's */
+void campip_focus_draw(int which, float x, float y, float w, float h); /* which: 1 the film's window, 2 the camera's and the controls on it (play/pause, full screen), its tap and its drag */
+void pipui_tap(int which, int b); /* a tap or click on a corner window (HitFn): the first shows its controls, a second opens it */
+void pipui_place(float *x, float *y, float w, float h); /* the place a dragged window keeps (a phone), else untouched */
 #endif
