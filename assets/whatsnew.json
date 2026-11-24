@@ -1,40 +1,20 @@
 {
-  "version": "3.0.14",
+  "version": "3.0.15",
   "items": [
     {
-      "icon": "wn_best",
-      "title": "Welcome to Stremio Plus",
-      "text": "A new name and a new icon. Updates now come from this app's own releases: Settings > About > Check for updates."
+      "icon": "g_spark",
+      "title": "Corner window: one way back",
+      "text": "Press OK twice from anywhere to focus the corner window. A ring and a key panel show it, then press OK for full screen. The Blue key works too, on remotes that have one."
     },
     {
       "icon": "wn_people",
-      "title": "Watch party",
-      "text": "Watch the same title in sync from different places. Invite someone on your account, they accept or decline, and leaving only unsyncs them."
+      "title": "Watch party is ready",
+      "text": "The watch party server is built in now. Play a film, open Watch party, and choose Start a watch party."
     },
     {
       "icon": "g_spark",
-      "title": "Picture in picture, everywhere",
-      "text": "Press OK on the corner window to bring it back to full screen. Switch between a film and a camera in the corner, and float video on the phone too."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Cameras: sound and switching",
-      "text": "Camera audio with its own volume and mix, and next and previous camera keys in the corner window and the full-screen viewer."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Subtitles that recover",
-      "text": "When a subtitle fails, the player moves to the next track or subtitle, and then to the next source."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Search starts on letters",
-      "text": "The keyboard opens on Q with letters first, and the microphone sits next to the search box."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Continue Watching order",
-      "text": "Continue Watching now refreshes while a film plays in the corner, so what you watched last comes first."
+      "title": "Microphone in one press",
+      "text": "On the search keyboard, press Back from any key to jump to the microphone."
     }
   ]
 }

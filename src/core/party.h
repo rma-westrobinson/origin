@@ -9,7 +9,7 @@
 #define SB_PARTY_H
 /* A placeholder until the Worker is deployed (server/watchparty/README.md): an address with ".example." in it is
    "not set up", and the app then never contacts any server. Set the real one here or in the "partyUrl" setting. */
-#define PARTY_DEFAULT_URL "https://origin-watchparty.example.workers.dev"
+#define PARTY_DEFAULT_URL "https://origin-watchparty.rogerma0118.workers.dev"
 void party_tick(void); /* once a frame (polls, applies the others' commands, notices this device's own) */
 void party_draw(void); /* once a frame after the toasts: the invite card or the party menu, over everything */
 int party_key(int k, int down); /* 1 when the card or menu took the key (all keys, while one is up) */

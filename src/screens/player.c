@@ -6346,7 +6346,7 @@ void player_mini_draw(void) {
     gfx_rrect(cx - bw * 1.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
     gfx_rrect(cx + bw * 0.6f, cy - bh / 2, bw, bh, 3, WHITE_A(220));
   }
-  campip_focus_draw(0, x, y, w, h);
+  campip_focus_draw(1, x, y, w, h);
   hit_act(x, y, w, h, mini_expand, 0, 0);
 }
 /* the remote's media keys act on the corner's film; 1 when the key was used */

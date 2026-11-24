@@ -825,8 +825,12 @@ static int key(int k) {
       }
     } else if (k == K_OK)
       type_key(key_at(S.kr, S.kc));
-    else if (k == K_BACK)
-      return 0;
+    else if (k == K_BACK) {
+      if (S.kr == -1 || !plat_voice_available())
+        return 0; /* on the microphone (or none here): Back leaves Search, as it always did */
+      S.kr = -1; /* from any key: Back is one press to the microphone (and the next Back leaves) */
+      S.kc = 0;
+    }
     if (k != K_OK && z0 == S.zone && kr0 == S.kr && kc0 == S.kc)
       nudge_start(&S.nudge, k); /* the key with its ring */
   } else if (S.zone == 1) {

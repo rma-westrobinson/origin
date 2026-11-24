@@ -1772,6 +1772,9 @@ static void ok_up(void) {
   }
 }
 static void key_core(int k, int down, int repeat);
+#define OK_DBL_MS 350 /* double-click OK window (see key_core) */
+static int okPend, okPendUp, okDbl, okRaw;
+static double okPendAt;
 /* ---- the Magic Remote pointer. How it behaves (timings as measured on LG TVs):
    pointing moves the same highlight the arrows move and the screen follows as for the arrows; the brake: while
    the thing under the pointer is still moving the pointer must stand still 150 ms first. A click is OK pressed
@@ -2037,7 +2040,9 @@ void app_pointer_button(int down, float x, float y) {
     d->focus(d->a, d->b);
     ptr_keep(d);
     PTR.down = 1;
+    okRaw++;
     key_core(K_OK, 1, 0); /* OK pressed (held: the card's menu) */
+    okRaw--;
     return;
   }
   if (PTR.eatUp) {
@@ -2054,7 +2059,9 @@ void app_pointer_button(int down, float x, float y) {
     return;
   }
   if (dn == 1) {
+    okRaw++;
     key_core(K_OK, 0, 0);
+    okRaw--;
     return;
   }
   if (dn == 4)
@@ -2248,6 +2255,21 @@ float app_hold_k(double at) {
   float x = (float)((NOW - at) * 1000 - 220) / (HOLD_MS - 220);
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
+/* Double-click OK (the Google TV Streamer remote has no colour keys): while a corner window shows and has no focus, a
+   first OK press waits OK_DBL_MS; a second inside that window focuses the window (OK then expands it). With no window
+   showing OK is never delayed. The pointer's clicks (okRaw) and text entry never wait. */
+static void ok_pend_flush(void) {
+  if (!okPend)
+    return;
+  int up = okPendUp;
+  okPend = 0;
+  okPendUp = 0;
+  okRaw++; /* replayed as it was pressed, past the double-click check */
+  key_core(K_OK, 1, 0);
+  if (up)
+    key_core(K_OK, 0, 0);
+  okRaw--;
+}
 static void key_core(int k, int down, int repeat) {
   if (down) {
     keyHeld = repeat != 0;
@@ -2258,6 +2280,38 @@ static void key_core(int k, int down, int repeat) {
     okDown = down;
   if (party_key(k, down))
     return; /* the watch party's invite or menu has the keys while it is up (and the yellow key opens the menu) */
+  if (okPend && k != K_CURSOR_SHOW && k != K_CURSOR_HIDE && (k != K_OK || NOW - okPendAt >= OK_DBL_MS / 1000.0))
+    ok_pend_flush(); /* another key (or a late OK) while the first OK waited: that OK acts first */
+  if (down && k == K_BLUE && pip_focus_summon())
+    return; /* the way to the corner window from anywhere, a film included: the focus is on it, OK expands it */
+  if (k == K_OK && !okRaw && !text_taker()) { /* the remote has no colour keys: double-click OK summons the corner window */
+    if (down && !repeat) {
+      if (okPend && NOW - okPendAt < OK_DBL_MS / 1000.0 && pip_focus_summon()) {
+        okPend = 0;
+        okDbl = 1;
+        okDown = 0;
+        sound_play(SND_FOCUS);
+        return; /* the second press: the focus is on the window; its release is eaten too */
+      }
+      if (!okPend && pip_dblok_armed()) {
+        okPend = 1;
+        okPendUp = 0;
+        okPendAt = NOW;
+        okDown = 0;
+        return; /* the first press waits OK_DBL_MS for a second (app_tick replays it) */
+      }
+    } else if (down && okPend) {
+      return; /* a repeat of the held first press */
+    } else if (!down && okDbl) {
+      okDbl = 0;
+      return;
+    } else if (!down && okPend) {
+      okPendUp = 1;
+      return;
+    }
+  }
+  if (down && pip_focus_key(k))
+    return; /* the focus is on the corner window: OK expands it (a film playing full screen too) */
   if (player_open()) {
     if (!(k == K_OK && repeat && down))
       player_key(k, down);
@@ -2268,8 +2322,6 @@ static void key_core(int k, int down, int repeat) {
       ok_up();
     return;
   }
-  if (pip_focus_key(k))
-    return; /* the focus is on the corner window: OK expands it */
   if (player_mini_key(k))
     return; /* play, pause, stop: for the film in the corner */
   if (campip_key(k))
@@ -2494,6 +2546,8 @@ void app_tick(float dt) {
   DT = dt;
   NOW = SDL_GetTicks() / 1000.0;
   FRAME++;
+  if (okPend && NOW - okPendAt >= OK_DBL_MS / 1000.0)
+    ok_pend_flush(); /* no second OK came: the single press acts now */
   ptr_frame();
   touch_tick();
   {

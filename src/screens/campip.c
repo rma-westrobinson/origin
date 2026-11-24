@@ -323,8 +323,9 @@ int campip_key(int k) {
   return 0;
 }
 
-/* ---- the remote's focus on a corner window (TV): moving down or sideways off the page's last element lands on it;
-   OK expands it, Back or Up gives the focus back to the page. The window's own keys while it has the focus:
+/* ---- the remote's focus on a corner window (TV): the Blue key (pip_focus_summon) lands on it from anywhere, and so
+   does an arrow that moved nothing on the page (a shortcut, page-dependent); OK expands it, Back or Up gives the
+   focus back to the page. The window's own keys while it has the focus:
    Left/Right the previous and next camera, Down the film or the camera (the other window comes, this one is kept),
    Channel keys / FF / Rew the camera's volume, Yellow its sound on and off. ---- */
 static int vis_kind(void) {
@@ -338,6 +339,24 @@ static void vis_rect(int which, float *x, float *y, float *w, float *h) {
 }
 int pip_focused(void) {
   return F && F == vis_kind();
+}
+/* The one way to the corner window, from any screen (the film playing full screen, a page, a sheet): the Blue key.
+   Nothing on a screen sees it first, and it needs no page state: it puts the focus on the window showing in the corner
+   (the film's or the camera's) and the window's ring and key panel say so; OK then expands it. Pressing it again
+   keeps the focus. 1 when the key was used (0 when no window shows). */
+int pip_focus_summon(void) {
+  if (form_touch())
+    return 0; /* a phone: the window has touch buttons */
+  int w = vis_kind();
+  if (!w)
+    return 0; /* no window shows: the key is the page's own (the episode list uses it) */
+  F = w;
+  return 1;
+}
+/* 1 when a corner window shows on a TV and does not yet have the focus: the one state in which OK waits to see if a
+   second press follows (double-click OK, app.c). Anything else, OK acts at once. */
+int pip_dblok_armed(void) {
+  return !form_touch() && !F && vis_kind() != 0;
 }
 int pip_focus_try(int kv) {
   if (form_touch() || F || player_open() || (kv != K_DOWN && kv != K_LEFT && kv != K_RIGHT))
@@ -415,9 +434,6 @@ int pip_focus_key(int k) {
       aud_apply();
     }
     return 1;
-  case K_BLUE:
-    campip_swap();
-    return 1;
   case K_PLAY:
   case K_PAUSE:
   case K_PLAYPAUSE:
@@ -483,6 +499,8 @@ void campip_focus_draw(int which, float x, float y, float w, float h) {
   int other = which == 2 ? player_mini() : (C.open || cam_count() > 0);
   int rows = 2 + (which == 2 && cam_count() > 1) + 0;
   float ph = rows * 48 + 16, py = y - 12 - ph;
+  if (py < 8)
+    py = y + h + 12; /* (a window at the top of the screen: the keys go under it) */
   gfx_rrect(x, py, w, ph, 18, BLACK_A(185));
   float ry = py + 32;
   key_hint(x + 18, ry, K_OK, T("Full screen"), WHITE_A(240), 0);
