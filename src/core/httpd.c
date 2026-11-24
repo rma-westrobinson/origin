@@ -329,7 +329,7 @@ static void camera_page(Buf *b) {
   hx(b, pt("Camera name"));
   b_s(b, "\"><input id=\"a\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"");
   hx(b, pt("Stream address"));
-  b_s(b, " rtsp://192.168.1.50:554/stream1\" style=\"margin-top:12px\"><input id=\"u\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"");
+  b_s(b, " (e.g. 192.168.1.50)\" style=\"margin-top:12px\"><input id=\"u\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"");
   hx(b, pt("Camera account user"));
   b_s(b, "\" style=\"margin-top:12px\"><input id=\"p\" type=\"password\" dir=\"ltr\" autocomplete=\"off\" autocapitalize=\"off\" placeholder=\"");
   hx(b, pt("Camera account password"));

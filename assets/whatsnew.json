@@ -1,15 +1,10 @@
 {
-  "version": "3.0.17",
+  "version": "3.0.18",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Adding a camera says what went wrong",
-      "text": "On the camera page, a wrong or empty address now tells you so, and if the app does not answer the page says that. The card in the app no longer waits forever: after a minute and a half with no camera it says so, and it still finishes if the camera arrives late."
-    },
-    {
-      "icon": "g_spark",
-      "title": "Updates ask once, and say why if they fail",
-      "text": "The in-app update now always shows the system's confirm screen, and if Android refuses it the message says why, including when the new build is signed with a different key."
+      "title": "Camera page shows just an IP address",
+      "text": "On the camera page the stream address example is now just an IP address, like 192.168.1.50. You do not type rtsp:// or the port: the app adds them."
     }
   ]
 }
