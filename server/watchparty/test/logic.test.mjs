@@ -23,6 +23,13 @@ r = roomOp(st, t, "event", { a: A, dev: "ghost", type: "pause", pos: 1 }); asser
 r = roomOp(st, t, "leave", { a: A, dev: "tv0001" }); st = r.state; assert.ok(st);
 r = roomOp(st, t, "poll", { a: A, dev: "phone01", since: 0 }); assert.equal(r.resp.members.length, 1);
 assert.equal(r.resp.events.at(-1).type, "leave");
+// web chat (the TV's QR page): no account, no member; chat only; clipped; one a second
+r = roomOp(st, t, "webchat", { text: "  hi  ".padEnd(400, "x"), name: "" }); st = r.state; assert.equal(r.status, undefined);
+r = roomOp(st, t, "poll", { a: A, dev: "phone01", since: 0 });
+const wev = r.resp.events.at(-1); assert.deepEqual([wev.type, wev.dev, wev.name], ["chat", "web", "Phone"]); assert.equal(wev.text.length, 298);   // clipped to 300, then trimmed
+r = roomOp(st, t, "webchat", { text: "too soon" }); assert.equal(r.status, 429);
+r = roomOp(st, t + 1500, "webchat", { text: "   " }); assert.equal(r.status, 400);
+r = roomOp(null, t, "webchat", { text: "x" }); assert.equal(r.status, 404);
 // silent devices time out
 r = roomOp(st, t, "join", { a: A, dev: "tv0001", name: "TV" }); st = r.state;
 t += MEMBER_TTL + 1000;

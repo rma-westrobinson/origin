@@ -49,6 +49,19 @@ send it invites. Set `PARTY_KEY` to close that. A device is `dev`, a random 16-h
 
 Members that do not poll for 60 s are dropped; rooms idle for 6 h, invites after 10 min.
 
+## Chat from a phone's browser (the TV's QR code)
+
+| Call | Does |
+|---|---|
+| `GET /chat/:code` | a small typing page (plain HTML): message, optional name (default "Phone"), Send |
+| `POST /chat/:code` `{text, name?}` | appends a `chat` event from the pseudo device `web` to that room (1 a second per room) |
+
+These two routes sit outside `/v1`: no account hash, no device and no `X-Party-Key`, because a phone's browser has none.
+**The party code is the only credential**: 6 random characters, and a room is gone after 6 h idle, so anyone who sees the
+QR code or its address can post chat lines to that party while it lasts. They can only add chat, never play, pause, seek
+or load, and they do not keep the room alive. The app shows the QR code (`<server>/chat/<code>`) in the chat sidebar on a
+TV. An older server without these routes just makes the QR code open a 404 page; nothing else changes.
+
 ## Tests
 
 `npm test` (node, no dependencies): `test/logic.test.mjs` covers `src/logic.js` (room and inbox logic), and
@@ -57,5 +70,4 @@ Cloudflare (no credentials here), so the `wrangler.toml` bindings and migration 
 
 ## Not built
 
-Sending chat from the app (the server and the app already show incoming chat as a notice; typing on a TV remote needs a
-keyboard card that was out of scope for this build).
+Typing on a TV with the remote: a TV scans a QR code and types on a phone instead.

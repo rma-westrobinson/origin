@@ -9,9 +9,11 @@
 #include "platform/plat.h"
 #include "screens/player.h"
 #include "ui/gfx.h"
+#include "ui/qr.h"
 #include "ui/text.h"
 #include "cJSON.h"
 #include "sbcrypto.h"
+#include <SDL2/SDL.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,6 +25,7 @@
    load commands, one event after another with a number, and a snapshot of where the film is. */
 
 #define NMAX 8
+#define CHATMAX 50 /* messages kept for the sidebar */
 typedef struct {
   char dev[48], name[48];
 } PDev;
@@ -68,6 +71,14 @@ static struct {
     char lb[120];
   } row[16];
   int nrow;
+  /* the chat sidebar (the player's): the last CHATMAX messages, and on a phone the draft being typed */
+  int side, typing, nchat;
+  struct {
+    char who[48], text[304];
+    int mine;
+  } chat[CHATMAX];
+  char draft[304];
+  float sbx, sby, sbw, sbh, inx, iny, inw, inh, sdx, sdy, sdw, sdh, clx, cly, clw, clh; /* its box, field, Send, Close */
   /* where the cards were drawn (layout units), for clicks */
   float rx[16], ry[16], rw[16], rh[16], cardX, cardY, cardW, cardH, ax, ay, aw, ah, dx, dy, dw, dh;
 } Pt;
@@ -181,8 +192,33 @@ static int local_media(PMedia *m) {
   return player_now(m->type, m->id, m->vid, m->name, 200) && m->id[0];
 }
 
+/* ---- the chat sidebar's list and keyboard ---- */
+static void kb_stop(void) {
+  if (Pt.typing && SDL_IsTextInputActive())
+    SDL_StopTextInput();
+  Pt.typing = 0;
+}
+static void close_side(void) {
+  kb_stop();
+  Pt.side = 0;
+  Pt.sbw = Pt.inw = Pt.sdw = Pt.clw = 0; /* (no stale box to click) */
+}
+static void chat_add(const char *who, const char *text, int mine) {
+  if (Pt.nchat >= CHATMAX) {
+    memmove(&Pt.chat[0], &Pt.chat[1], sizeof Pt.chat[0] * (CHATMAX - 1));
+    Pt.nchat = CHATMAX - 1;
+  }
+  snprintf(Pt.chat[Pt.nchat].who, sizeof Pt.chat[0].who, "%s", who);
+  snprintf(Pt.chat[Pt.nchat].text, sizeof Pt.chat[0].text, "%s", text);
+  Pt.chat[Pt.nchat].mine = mine;
+  Pt.nchat++;
+}
+
 /* ---- leaving, the room's people ---- */
 static void drop(const char *why) {
+  close_side();
+  Pt.nchat = 0;
+  Pt.draft[0] = 0;
   Pt.in = 0;
   Pt.gen++;
   Pt.code[0] = 0;
@@ -278,8 +314,11 @@ static void on_event(const cJSON *ev) {
   else if (!strcmp(type, "chat")) {
     char text[300], line[400];
     jstr(ev, "text", text, sizeof text);
-    snprintf(line, sizeof line, "%s: %s", who, text);
-    toast(line, 4500, NULL);
+    chat_add(who, text, 0);
+    if (!Pt.side) { /* (with the sidebar open the list is the notice) */
+      snprintf(line, sizeof line, "%s: %s", who, text);
+      toast(line, 4500, NULL);
+    }
   }
 }
 static void on_poll(int status, const unsigned char *body, size_t len, void *ud) {
@@ -340,6 +379,46 @@ static void send_event(const char *type, double pos, const PMedia *m) {
     cJSON_AddItemToObject(b, "media", media_json(m));
   post(path, b, ignore_cb, NULL);
   Pt.sentAt = app_now();
+}
+/* a chat line goes out as the room's "chat" event, through the same post() as the others */
+#define DRAFTMAX 280 /* bytes: the server keeps 300 characters, and what comes back is read into 300 bytes */
+static void chat_sent(int status, const unsigned char *body, size_t len, void *ud) {
+  (void)body;
+  (void)len;
+  if ((int)(intptr_t)ud != Pt.gen)
+    return;
+  if (status != 200)
+    toast(T("Message not sent"), 2600, NULL);
+}
+static void chat_send(void) {
+  if (!Pt.in)
+    return;
+  char t[sizeof Pt.draft];
+  const char *a = Pt.draft;
+  while (*a == ' ' || *a == '\t')
+    a++;
+  snprintf(t, sizeof t, "%s", a);
+  size_t n = strlen(t);
+  while (n && (t[n - 1] == ' ' || t[n - 1] == '\t'))
+    t[--n] = 0;
+  Pt.draft[0] = 0;
+  if (!t[0])
+    return;
+  char path[64];
+  cJSON *b = cJSON_CreateObject();
+  snprintf(path, sizeof path, "party/%s/event", Pt.code);
+  cJSON_AddStringToObject(b, "type", "chat");
+  cJSON_AddStringToObject(b, "text", t);
+  post(path, b, chat_sent, (void *)(intptr_t)Pt.gen);
+  chat_add(Pt.me, t, 1); /* (the poll skips this device's own events: its own line is added here, at once) */
+}
+static void kb_start(void) {
+  SDL_Rect r = { 0, 0, 10, 10 };
+  if (SDL_IsTextInputActive())
+    SDL_StopTextInput(); /* (so the system's keyboard comes up again if it was put away) */
+  SDL_SetTextInputRect(&r);
+  SDL_StartTextInput();
+  Pt.typing = 1;
 }
 
 /* ---- the film here, against the party's ---- */
@@ -452,6 +531,8 @@ static void join(const char *code) {
   Pt.fails = 0;
   Pt.seq = 0;
   Pt.base = Pt.pending = Pt.announce = 0;
+  Pt.nchat = 0;
+  Pt.draft[0] = 0;
   Pt.nextPoll = app_now() + 1;
   snprintf(Pt.code, sizeof Pt.code, "%s", code);
   char path[64];
@@ -475,6 +556,8 @@ static void on_created(int status, const unsigned char *body, size_t len, void *
   }
   Pt.in = 1;
   Pt.fails = 0;
+  Pt.nchat = 0;
+  Pt.draft[0] = 0;
   Pt.seq = (long)jnum(j, "seq", 0);
   snprintf(Pt.code, sizeof Pt.code, "%s", code);
   members_read(cJSON_GetObjectItemCaseSensitive(j, "members"));
@@ -574,8 +657,11 @@ void party_tick(void) {
     if (Pt.in)
       drop(NULL);
     Pt.inv.show = Pt.menu = 0;
+    close_side();
     return;
   }
+  if (Pt.side && (!Pt.in || !player_open()))
+    close_side(); /* the sidebar belongs to the film's screen */
   double now = app_now();
   if (Pt.inv.show && now - Pt.inv.at > 90) { /* nobody answered: it goes away, and is not offered again */
     Pt.inv.show = 0;
@@ -626,6 +712,167 @@ static void button(float x, float y, float w, float h, const char *lb, int on) {
   text_draw(lb, x + w / 2, y + h / 2 - text_line_height((int)(24 * u)) / 2.0f, (int)(24 * u), 700, on ? ACC_FG : WHITE_A(230), 0,
             w - 16, ALIGN_CENTER);
 }
+/* ---- the chat sidebar: a box at the film's right edge (the film plays on under and beside it). A phone has a field
+   (it opens the system's keyboard) and Send; a TV has a QR code that opens a typing page on the party's server. ---- */
+static void chat_url(char *out, size_t cap) {
+  char b[200];
+  snprintf(b, sizeof b, "%s", url_base());
+  size_t n = strlen(b);
+  while (n && b[n - 1] == '/')
+    b[--n] = 0;
+  snprintf(out, cap, "%s/chat/%s", b, Pt.code);
+}
+static void side_draw(void) {
+  float u = U(), sT = 0, sB = 0, sL = 0, sR = 0;
+  if (form_touch())
+    form_safe(&sT, &sB, &sL, &sR); /* (a TV never asks the platform) */
+  float m = 14 * u, w = 380 * u;
+  if (w > SB_W * 0.42f)
+    w = SB_W * 0.42f;
+  float x = SB_W - sR - m - w, y = sT + m, h = SB_H - sT - sB - 2 * m, pad = 16 * u;
+  Pt.sbx = x;
+  Pt.sby = y;
+  Pt.sbw = w;
+  Pt.sbh = h;
+  gfx_shadow(x, y + 10 * u, w, h, 18 * u, 36 * u, BLACK_A(120));
+  gfx_rrect(x, y, w, h, 18 * u, RGBA(24, 24, 26, 235));
+  gfx_ring(x, y, w, h, 18 * u, 1, WHITE_A(24));
+  /* the head: its title and Close */
+  float cw = 84 * u, ch = 36 * u, cy = y + pad;
+  Pt.clx = x + w - pad - cw;
+  Pt.cly = cy;
+  Pt.clw = cw;
+  Pt.clh = ch;
+  text_draw(T("Chat"), x + pad, cy + ch / 2 - text_line_height((int)(26 * u)) / 2.0f, (int)(26 * u), 700, WHITE_A(240), -0.1f,
+            w - 2 * pad - cw - 8 * u, ALIGN_LEFT);
+  gfx_rrect(Pt.clx, cy, cw, ch, ch / 2, WHITE_A(24));
+  text_draw(T("Close"), Pt.clx + cw / 2, cy + ch / 2 - text_line_height((int)(18 * u)) / 2.0f, (int)(18 * u), 600, WHITE_A(225), 0,
+            cw - 8 * u, ALIGN_CENTER);
+  float top = cy + ch + 12 * u, bottom = y + h - pad;
+  if (form_touch()) {
+    /* the field and Send sit under the head, not at the foot: the keyboard of a phone held on its side covers the foot */
+    float ih = 44 * u, sw = 84 * u, gap = 8 * u, px = 20 * u;
+    Pt.inx = x + pad;
+    Pt.iny = top;
+    Pt.inw = w - 2 * pad - sw - gap;
+    Pt.inh = ih;
+    Pt.sdx = Pt.inx + Pt.inw + gap;
+    Pt.sdy = top;
+    Pt.sdw = sw;
+    Pt.sdh = ih;
+    gfx_rrect(Pt.inx, top, Pt.inw, ih, ih / 2, WHITE_A(Pt.typing ? 36 : 20));
+    if (Pt.typing)
+      gfx_ring(Pt.inx, top, Pt.inw, ih, ih / 2, 1.5f, ACC);
+    int fp = (int)px;
+    float ty = top + ih / 2 - text_line_height(fp) / 2.0f, tx = Pt.inx + 16 * u, tw = 0;
+    if (!Pt.draft[0]) {
+      text_draw(T("Message"), tx, ty, fp, 500, WHITE_A(110), 0, Pt.inw - 32 * u, ALIGN_LEFT);
+    } else { /* the end of the draft is what shows */
+      size_t len = strlen(Pt.draft);
+      int cap = (int)((Pt.inw - 40 * u) / (px * 0.55f));
+      if (cap < 4)
+        cap = 4;
+      const char *sh = Pt.draft;
+      if ((int)len > cap) {
+        sh = Pt.draft + len - cap;
+        while (*sh && ((unsigned char)*sh & 0xc0) == 0x80)
+          sh++;
+      }
+      char buf[sizeof Pt.draft + 4];
+      snprintf(buf, sizeof buf, "%s%s", sh != Pt.draft ? "\xe2\x80\xa6" : "", sh);
+      tw = text_draw(buf, tx, ty, fp, 500, WHITE_A(235), 0, Pt.inw - 32 * u, ALIGN_LEFT);
+    }
+    if (Pt.typing && fmod(app_now(), 1.0) < 0.55) {
+      float cx = tx + tw + 2 * u;
+      if (cx > Pt.inx + Pt.inw - 10 * u)
+        cx = Pt.inx + Pt.inw - 10 * u;
+      gfx_rect(cx, ty + 2 * u, 2 * u, text_line_height(fp) - 4 * u, ACC);
+    }
+    int ready = Pt.draft[0] != 0;
+    gfx_rrect(Pt.sdx, top, sw, ih, ih / 2, ready ? ACC : WHITE_A(22));
+    text_draw(T("Send"), Pt.sdx + sw / 2, top + ih / 2 - text_line_height((int)(20 * u)) / 2.0f, (int)(20 * u), 700,
+              ready ? ACC_FG : WHITE_A(120), 0, sw - 8 * u, ALIGN_CENTER);
+    top += ih + 12 * u;
+  } else {
+    Pt.inw = Pt.sdw = 0;
+    /* a TV: the QR code of the typing page, its address under it, and what to do */
+    char url[300];
+    chat_url(url, sizeof url);
+    const char *cut = strstr(url, "/chat/");
+    char l1[240], l2[48];
+    snprintf(l1, sizeof l1, "%.*s", (int)(cut ? (size_t)(cut - url) : strlen(url)), url);
+    snprintf(l2, sizeof l2, "%s", cut ? cut : "");
+    float tw = w - 2 * pad;
+    int p1 = (int)(17 * u), p2 = (int)(24 * u);
+    while (p1 > 9 && text_width(l1, p1, 500, 0) > tw)
+      p1--;
+    float qs = tw < 260 * u ? tw : 260 * u, urlH = text_line_height(p1) + text_line_height(p2) + 4 * u;
+    int hp = (int)(19 * u);
+    const char *hint = T("Scan with your phone to chat");
+    int hl = text_wrap_count(hint, tw, 2, hp, 600, 0);
+    float hH = hl * text_line_height(hp);
+    float uy = bottom - urlH, qy = uy - 8 * u - qs, hy = qy - 10 * u - hH;
+    text_draw(l1, x + w / 2, uy, p1, 500, WHITE_A(150), 0, tw, ALIGN_CENTER);
+    text_draw(l2, x + w / 2, uy + text_line_height(p1) + 4 * u, p2, 700, WHITE_A(235), 0, tw, ALIGN_CENTER);
+    qr_draw(url, x + w / 2 - qs / 2, qy, qs, 14 * u, 8 * u);
+    text_draw_wrapped(hint, x + w / 2, hy, tw, 2, hp, 600, WHITE_A(200), 0, ALIGN_CENTER, text_line_height(hp));
+    bottom = hy - 10 * u;
+  }
+  /* the messages, newest at the foot */
+  int np = (int)(21 * u), nm = (int)(16 * u);
+  float tw = w - 2 * pad, lh = (float)text_line_height(np), nh = (float)text_line_height(nm), cyy = bottom;
+  if (!Pt.nchat)
+    text_draw_wrapped(T("No messages yet"), x + w / 2, top + 8 * u, tw, 2, np, 500, WHITE_A(100), 0, ALIGN_CENTER, lh);
+  for (int i = Pt.nchat - 1; i >= 0; i--) {
+    int nl = text_wrap_count(Pt.chat[i].text, tw, 8, np, 500, 0);
+    float mh = nh + nl * lh + 12 * u;
+    if (cyy - mh < top)
+      break;
+    cyy -= mh;
+    text_draw(Pt.chat[i].mine ? T("You") : Pt.chat[i].who, x + pad, cyy, nm, 700, Pt.chat[i].mine ? ACC : WHITE_A(150), 0, tw,
+              ALIGN_LEFT);
+    text_draw_wrapped(Pt.chat[i].text, x + pad, cyy + nh, tw, 8, np, 500, WHITE_A(232), 0, ALIGN_LEFT, lh);
+  }
+}
+static int side_key(int k, int down) {
+  if (k == K_BACK || k == K_EXIT) {
+    if (down)
+      close_side(); /* (Back closes the box and the keyboard together) */
+    return 1;
+  }
+  if (Pt.typing) { /* the field has the keyboard: Enter sends; Space is a space, not play/pause */
+    if (k == K_OK) {
+      if (down)
+        chat_send();
+      return 1;
+    }
+    if (k == K_PLAYPAUSE)
+      return 1;
+  }
+  return 0; /* (a TV's other keys still run the film) */
+}
+int party_typing(void) {
+  return Pt.side && Pt.typing && !Pt.menu && !Pt.inv.show;
+}
+int party_text(const char *utf8) {
+  if (!party_typing() || !utf8)
+    return 0;
+  size_t n = strlen(Pt.draft);
+  if (utf8[0] == '\b') { /* Backspace: one character off the end */
+    if (n) {
+      n--;
+      while (n && (Pt.draft[n] & 0xc0) == 0x80)
+        n--;
+      Pt.draft[n] = 0;
+    }
+    return 1;
+  }
+  if ((unsigned char)utf8[0] < ' ')
+    return 1; /* (Enter and the like are keys, not text) */
+  if (n + strlen(utf8) <= DRAFTMAX)
+    strcat(Pt.draft, utf8);
+  return 1;
+}
 static void menu_rows(void) {
   Pt.nrow = 0;
 #define ROW(A, ARG, TEXT)                                  \
@@ -648,6 +895,8 @@ static void menu_rows(void) {
       if (!mem)
         ROW(2, i, T1("Invite {n}", "n", Pt.online[i].name));
     }
+    if (player_open())
+      ROW(5, 0, Pt.side ? T("Close chat") : T("Chat"));
     ROW(3, 0, T("Leave the watch party"));
   }
   ROW(4, 0, T("Close"));
@@ -684,11 +933,20 @@ static void menu_act(int i) {
   case 4:
     Pt.menu = 0;
     break;
+  case 5:
+    Pt.menu = 0;
+    if (Pt.side)
+      close_side();
+    else if (Pt.in && player_open())
+      Pt.side = 1;
+    break;
   }
 }
 void party_draw(void) {
   float u = U();
   Pt.cardH = 0;
+  if (Pt.side && Pt.in)
+    side_draw(); /* (under the invite card and the menu, which are drawn over it) */
   if (Pt.inv.show) {
     float h = 300 * u, x, y, w;
     card_box(&x, &y, &w, h);
@@ -744,6 +1002,8 @@ void party_draw(void) {
 }
 int party_key(int k, int down) {
   if (!Pt.inv.show && !Pt.menu) {
+    if (Pt.side && side_key(k, down))
+      return 1;
     if (down && k == K_YELLOW && party_available() && ident()) {
       party_menu_open();
       return 1;
@@ -795,5 +1055,24 @@ int party_click(float x, float y) {
       }
     return 1;
   }
-  return 0;
+  if (Pt.side && Pt.sbw > 0) {
+    if (inside(x, y, Pt.sbx, Pt.sby, Pt.sbw, Pt.sbh)) {
+      if (inside(x, y, Pt.clx, Pt.cly, Pt.clw, Pt.clh))
+        close_side();
+      else if (form_touch()) {
+        if (inside(x, y, Pt.inx, Pt.iny, Pt.inw, Pt.inh))
+          kb_start(); /* the field: the system's keyboard */
+        else if (inside(x, y, Pt.sdx, Pt.sdy, Pt.sdw, Pt.sdh))
+          chat_send();
+        else if (Pt.typing)
+          kb_stop();
+      }
+      return 1;
+    }
+    if (Pt.typing) { /* a tap on the film while typing only puts the keyboard away */
+      kb_stop();
+      return 1;
+    }
+  }
+  return 0; /* (a tap beside the sidebar is the film's) */
 }

@@ -20,4 +20,27 @@ r = await call(`party/${code}/leave`, { a: A, dev: "tv-00001" }); assert.equal(r
 const keyed = { ...env, PARTY_KEY: "s3" };
 r = await call("inbox/poll", { a: A, dev: "tv-00001" }, keyed); assert.equal(r.s, 403);
 r = await call("inbox/poll", { a: A, dev: "tv-00001" }, keyed, { "x-party-key": "s3" }); assert.equal(r.s, 200);
+// The typing page a TV's QR code opens: outside /v1, no account, no device, no party key (even when one is set).
+const web = (path, init, e = env) => worker.fetch(new Request("https://w" + path, init), e);
+const post = (path, body, e = env) => web(path, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) }, e);
+const room = await call("party/create", { a: A, dev: "phone-0001", name: "Phone" }); const wc = room.j.code;
+let w = await web(`/chat/${wc}`, {}, keyed); assert.equal(w.status, 200, "the page needs no party key");
+assert.match(w.headers.get("content-type"), /^text\/html/);
+const html = await w.text(); assert.ok(html.includes(wc) && html.includes("<form"), "the page carries the code and a form");
+w = await web(`/chat/${wc.toLowerCase()}`); assert.equal(w.status, 200, "the code is case-insensitive");
+w = await web("/chat/abc"); assert.equal(w.status, 400);
+w = await web("/chat/<script>"); assert.equal(w.status, 400);
+w = await web(`/chat/${wc}/x`); assert.equal(w.status, 400);
+w = await web(`/chat/${wc}`, { method: "PUT" }); assert.equal(w.status, 405);
+w = await post(`/chat/${wc}`, { text: "hello from the couch", name: "Mum" }, keyed); assert.equal(w.status, 200, "a post needs no account or key");
+w = await post(`/chat/${wc}`, { text: "again" }); assert.equal(w.status, 429, "one line a second per room");
+w = await post(`/chat/ZZZZZZ`, { text: "x" }); assert.equal(w.status, 404, "no such party");
+w = await post(`/chat/${wc}`, "not json"); assert.equal(w.status, 400);
+w = await post(`/chat/${wc}`, { text: "   " }); assert.equal(w.status, 400);
+w = await post(`/chat/${wc}`, "x".repeat(5000)); assert.equal(w.status, 413);
+r = await call(`party/${wc}/poll`, { a: A, dev: "phone-0001", since: 0 });
+const chats = r.j.events.filter((e) => e.type === "chat");
+assert.equal(chats.length, 1); assert.deepEqual([chats[0].text, chats[0].name, chats[0].dev], ["hello from the couch", "Mum", "web"]);
+r = await call(`party/${wc}/webchat`, { a: A, dev: "phone-0001", text: "x" }); assert.equal(r.s, 404, "the web op is not an app call");
+w = await web("/other"); assert.equal(w.status, 404);
 console.log("worker routes: all tests passed");

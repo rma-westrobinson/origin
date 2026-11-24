@@ -2184,6 +2184,11 @@ static int text_taker(void) {
 }
 void app_key(int k, int down, int repeat) {
   if (k == K_ERASE) {
+    if (party_typing()) {
+      if (down)
+        app_text("\b");
+      return;
+    } /* the watch party's chat field (over the film) */
     if (text_taker() && !player_open()) {
       if (down)
         app_text("\b");
@@ -2455,6 +2460,8 @@ static void key_dispatch(int k, int repeat) {
 }
 void app_text(const char *utf8) {
   idle_touch();
+  if (party_text(utf8))
+    return; /* the watch party's chat field has the keyboard */
   if (app_overlay && app_overlay->text)
     app_overlay->text(utf8);
   else if (screens[SCR] && screens[SCR]->text)

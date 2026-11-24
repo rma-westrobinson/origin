@@ -32,8 +32,23 @@ export function roomCreate(_st, now, b) {
     play: { playing: false, pos: 0, at: now }, members: { [b.dev]: { name: clip(b.name, 40), seen: now } } };
   return { state: st, resp: { code: st.code, seq: 0, members: members(st), ...snapshot(st, now) } };
 }
+// A chat line typed on the web page that a TV's QR code opens (GET /chat/<code>, see index.js). The page has no account
+// and no device: THE ROOM CODE IS THE ONLY CREDENTIAL HERE (6 random characters; a room is gone after ROOM_TTL idle),
+// so anyone who sees the QR code or the address can post to that party while it lasts. That is the price of typing
+// from any phone without signing in. It can only add a chat line: no play, pause, seek or load. The event comes from
+// the pseudo device "web" (never a member's), so every app shows it, and it does not keep the room alive.
+const WEB_GAP = 1000;   // ms between two web lines of one room
+function webChat(st, now, b) {
+  const text = clip(b.text, 300).trim();
+  if (!text) return { state: st, resp: { error: "empty" }, status: 400 };
+  if (now - (st.webAt || 0) < WEB_GAP) return { state: st, resp: { error: "slow down" }, status: 429 };
+  st.webAt = now;
+  push(st, { type: "chat", dev: "web", name: clip(b.name, 40).trim() || "Phone", text }, now);
+  return { state: st, resp: { ok: true } };
+}
 export function roomOp(st, now, op, b) {
   if (expired(st, now)) return { state: null, resp: { error: "no such party" }, status: 404 };
+  if (op === "webchat") return webChat(st, now, b);   // before the account check: see webChat
   if (b.a !== st.acct) return { state: st, resp: { error: "not your party" }, status: 403 };
   st.active = now;
   switch (op) {

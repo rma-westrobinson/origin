@@ -18,4 +18,9 @@ void party_menu_open(void); /* the Watch party menu (the player's button, Settin
 int party_available(void); /* signed in to Stremio, the server set up, and switched on */
 int party_active(void); /* in a party now */
 void party_leave(void); /* leaves it: the film plays on, unsynced */
+/* The chat sidebar (the player's, opened from the Watch party menu): the party's messages, and a way to write one. A
+   phone types in a field on the system's keyboard; a TV shows a QR code for a typing page on the party's server
+   (server/watchparty, GET /chat/<code>). The film plays on and keeps its keys, except Back (closes the sidebar). */
+int party_typing(void); /* the phone's chat field has the keyboard (Backspace deletes there, it is not Back) */
+int party_text(const char *utf8); /* typed text ("\b" = Backspace): 1 when the chat field took it */
 #endif

@@ -1,15 +1,20 @@
 {
-  "version": "3.0.20",
+  "version": "3.0.21",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Playback fix for TVs",
-      "text": "Pressing play on a TV no longer closes the app: the player's picture-in-picture check now runs on phones and tablets only."
+      "title": "Watch party chat",
+      "text": "Open the Watch party menu in the player and choose Chat: a small sidebar lists the party's messages while the film plays on."
     },
     {
       "icon": "g_spark",
-      "title": "Phones and tablets unchanged",
-      "text": "Picture-in-picture over other apps, the corner window, the cameras and the watch party work as before."
+      "title": "Type on a phone",
+      "text": "On a phone or tablet, tap the field in the sidebar to open the keyboard, then tap Send. Your message reaches everyone in the party."
+    },
+    {
+      "icon": "g_spark",
+      "title": "Chat from a TV",
+      "text": "On a TV the sidebar shows a QR code. Scan it with a phone to open a typing page and send a message from anywhere. The page needs the watch party server updated."
     }
   ]
 }
