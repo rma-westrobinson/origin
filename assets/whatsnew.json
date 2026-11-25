@@ -1,10 +1,10 @@
 {
-  "version": "3.0.29",
+  "version": "3.0.30",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Watch party button stays in the player",
-      "text": "While you are in a watch party, the Watch party button now always shows in the player, on the phone as well as the TV, so you can reach Chat, Invite and Leave."
+      "title": "Type badges in search results",
+      "text": "Each search result now shows a small Movie, TV or YouTube badge on its poster, so you can tell the kinds apart at a glance."
     }
   ]
 }

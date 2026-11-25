@@ -28,4 +28,5 @@ const ItemList *search_results(void);
 int search_busy(void);
 int search_sug_list(const char **out, int max);
 void search_now(void); /* Enter: ask at once, without waiting for the typing to pause */
+void search_type_badge(const char *type, float x, float y, float h, int px); /* Movie / TV / YouTube pill on a poster */
 #endif

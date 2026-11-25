@@ -176,6 +176,7 @@ static void draw(void) {
     int pr = touch_pressed(NULL, res_tap, i, 0);
     phone_press_scale(pr, x, yy, cw, ch);
     phone_poster(&l->items[i], x, yy, cw, ch);
+    search_type_badge(l->items[i].type, x + 5, yy + 5, 20, 11);
     gfx_scale_pop();
     text_draw(l->items[i].name, x, yy + ch + 6, PH_TX_SMALL, 600, PH_TXT2, 0, cw, ALIGN_LEFT);
     hit_add_hold(x, yy, cw, ch + 24, NULL, res_tap, res_hold, i, 0);

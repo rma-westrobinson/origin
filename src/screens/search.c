@@ -1003,6 +1003,16 @@ static void res_focus(int i, int b) {
     S.ri = i;
   }
 }
+/* The small dark pill on a result's poster that says what kind it is (drawn by the app from the result's type;
+   other types get none). Drawn inside the card's lift, so the focused card's growth carries it. */
+void search_type_badge(const char *type, float x, float y, float h, int px) {
+  const char *lb = !strcmp(type, "movie") ? "Movie" : !strcmp(type, "series") ? "TV" : !strcmp(type, "youtube") ? "YouTube" : NULL;
+  if (!lb)
+    return;
+  float w = text_width(lb, px, 700, 0) + px * 1.4f;
+  gfx_rrect(x, y, w, h, h / 2, BLACK_A(185));
+  text_draw(lb, x + w / 2, y + h / 2 - text_line_height(px) / 2.0f, px, 700, WHITE_A(245), 0, w, ALIGN_CENTER);
+}
 static void draw(void) {
   int rtl = app_rtl();
   float ia = ease_apply(EASE_CSS_EASE, timer_x(&S.in)), iy = 22 * (1 - ia);
@@ -1184,6 +1194,7 @@ static void draw(void) {
         ph_surface(x, y, 236, 354, 16);
       else
         ph_picture(t, x, y, 236, 354, 16, WHITE_A(255));
+      search_type_badge(it->type, x + 10, y + 10, 28, 15);
       if (pass && hp > 0)
         hold_trace_draw(x, y, 236, 354, 16, ease_apply(EASE_IN_OUT, hp));
       lift_end(lk, x, y, 236, 354, 16);
