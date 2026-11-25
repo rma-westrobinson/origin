@@ -126,7 +126,7 @@ static void fx_icon_at(float u, float a, float fromX, float fromY) {
   gfx_opacity_push(a);
   gfx_scale_push(sc, sc, cx, cy);
   gfx_shadow(cx - 29, cy - 21, 58, 58, 29, 20, BLACK_A(110));
-  gfx_circle(cx, cy, 29, RGBA(16, 14, 22, 212));
+  gfx_circle(cx, cy, 29, RGBA(17, 17, 17, 212));
   gfx_circle(cx, cy, 19, ACC);
   icon_draw(FX.icon, cx - 13, cy - 13, 26, WHITE_A(255));
   gfx_scale_pop();
@@ -300,7 +300,7 @@ static void fx_draw(void) {
     float x = cx - cw / 2, y = cy - ch / 2;
     gfx_opacity_push(a);
     gfx_scale_push(sc, sc, cx, cy);
-    lglass_shell(x, y, cw, ch, ch / 2, RGBA(16, 14, 22, 205), 1); /* glass */
+    lglass_shell(x, y, cw, ch, ch / 2, RGBA(17, 17, 17, 205), 1); /* glass */
     gfx_circle(x + ch / 2, cy, 19, ACC);
     icon_draw(FX.icon, x + ch / 2 - 13, cy - 13, 26, WHITE_A(255));
     if (fold < 0.99f) {

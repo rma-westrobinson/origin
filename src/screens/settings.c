@@ -1737,7 +1737,7 @@ static void prev_frame(float x, float y, float w, float h,
   if (t)
     gfx_image(t, x, y, w, h, 18, WHITE_A(255), u0, v0, u1, v1);
   else
-    gfx_rrect(x, y, w, h, 18, RGB(0x1c, 0x1a, 0x24));
+    gfx_rrect(x, y, w, h, 18, RGB(0x1e, 0x1e, 0x1e));
   if (dim > 0)
     gfx_rrect(x, y, w, h, 18, col_alpha(PAGE, dim));
 }
@@ -1821,7 +1821,7 @@ static void tmdb_card(float x, float y, float w, float h, const char *tag, const
                       float a) {
   int rtl = app_rtl(), al = rtl ? ALIGN_RIGHT : ALIGN_LEFT;
   float pw = 104, ph = 156, px = rtl ? x + w - 16 - pw : x + 16, tx = rtl ? px - 18 : px + pw + 18, tw = w - pw - 50;
-  gfx_rrect(x, y, w, h, 16, lit ? RGBA(16, 14, 24, 214) : RGBA(16, 14, 24, 170));
+  gfx_rrect(x, y, w, h, 16, lit ? RGBA(18, 18, 18, 214) : RGBA(18, 18, 18, 170));
   gfx_ring(x, y, w, h, 16, lit ? 2 : 1, lit ? col_alpha(ACC, 0.85f) : WHITE_A(36));
   const char *pu = demo_art("demo3.poster.webp");
   GLuint pt = img_get_shaped(pu, (int)pw, (int)ph, 10, 0);
@@ -1852,7 +1852,7 @@ static void preview_keys(float x, float y, float w, float h) {
       img_cover_uv(asp, w / h, 0, &u0, &v0, &u1, &v1);
       gfx_image(bt, x, y, w, h, 18, WHITE_A(255), u0, v0, u1, v1);
     } else
-      gfx_rrect(x, y, w, h, 18, RGB(0x1c, 0x1a, 0x24));
+      gfx_rrect(x, y, w, h, 18, RGB(0x1e, 0x1e, 0x1e));
     gfx_rrect(x, y, w, h, 18, col_alpha(PAGE, 0.78f));
   }
   const char *EN_T = "Spirited Away",
@@ -1992,7 +1992,7 @@ static void preview_about(float x, float y, float w) {
   float h = about_h();
   const char *av = update_avail();
   int st = update_state();
-  gfx_rrect(x, y, w, h, 18, RGB(0x1c, 0x1a, 0x24));
+  gfx_rrect(x, y, w, h, 18, RGB(0x1e, 0x1e, 0x1e));
   static char icon[1100];
   if (!icon[0])
     snprintf(icon, sizeof icon, "file://%s/icon.png", plat_asset_dir());
@@ -2132,9 +2132,9 @@ static void line(const char *s, float x, float y, float L, int px, int wt, uint3
 /* the edges of a scrolled list fade where there is more to see: the panel's own colour laid over them */
 static void edge_fades(float x, float y, float w, float h, int top, int bottom) {
   if (top)
-    gfx_rrect_v(x, y, w, 40, 0, RGBA(21, 19, 28, 170), RGBA(21, 19, 28, 0));
+    gfx_rrect_v(x, y, w, 40, 0, RGBA(23, 23, 23, 170), RGBA(23, 23, 23, 0));
   if (bottom)
-    gfx_rrect_v(x, y + h - 72, w, 72, 0, RGBA(21, 19, 28, 0), RGBA(21, 19, 28, 170));
+    gfx_rrect_v(x, y + h - 72, w, 72, 0, RGBA(23, 23, 23, 0), RGBA(23, 23, 23, 170));
 }
 static void draw_row(const Setting *o, int i, float x, float y, float h, int f, float nx, float ny) {
   int rtl = app_rtl(), al = rtl ? ALIGN_RIGHT : ALIGN_LEFT, ar = rtl ? ALIGN_LEFT : ALIGN_RIGHT;

@@ -8,7 +8,7 @@
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "bgColor": "#121214",
-  "iconColor": "#1a1430",
+  "iconColor": "#121214",
   "resolution": "1920x1080",
   "requiredPermissions": ["all", "settings.query", "systemconfig.query", "application.launcher", "physicaldevice.query"],
   "nativeLifeCycleInterfaceVersion": 2

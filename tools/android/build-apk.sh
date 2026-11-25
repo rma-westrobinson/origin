@@ -30,12 +30,12 @@ A="$G/app/src/main/assets/app"; mkdir -p "$A"; cp -r "$ROOT/assets" "$A/assets";
 APP_NAME="$(sed -n 's/^#define APP_NAME "\(.*\)"$/\1/p' "$ROOT/src/core/brand.h")"; [ -n "$APP_NAME" ] || { echo "no APP_NAME in src/core/brand.h"; exit 1; }
 mkdir -p "$G/app/src/main/res/values"
 printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="app_name">%s</string></resources>\n' "$APP_NAME" > "$G/app/src/main/res/values/strings.xml"
-# the launcher icon (assets/logo.png, drawn by tools/gen-icon.py) and the TV banner (packaging/android/banner.png)
+# the launcher icon (the original Origin icon, assets/icon.png) and the TV banner (packaging/android/banner.png, the original logo on the page colour: tools/gen-icon.py)
 python3 - "$ROOT" "$G/app/src/main/res" <<'PY'
 import sys, os
 from PIL import Image
 root, res = sys.argv[1], sys.argv[2]
-icon = Image.open(os.path.join(root, 'assets/logo.png')).convert('RGBA')
+icon = Image.open(os.path.join(root, 'assets/icon.png')).convert('RGBA')
 for d, s in (('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)):
     os.makedirs(f'{res}/mipmap-{d}', exist_ok=True); icon.resize((s, s), Image.LANCZOS).save(f'{res}/mipmap-{d}/ic_launcher.png')
 os.makedirs(f'{res}/drawable-xhdpi', exist_ok=True)

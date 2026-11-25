@@ -1,4 +1,4 @@
-// Watch party signaling for Origin / Stremio Plus: rooms by code, and one inbox per account for invites.
+// Watch party signaling for Origin Plus: rooms by code, and one inbox per account for invites.
 // Plain HTTP + JSON (the app polls about once a second in a party, every few seconds out of one).
 import { roomCreate, roomOp, inboxOp } from "./logic.js";
 import { chatPage } from "./page.js";

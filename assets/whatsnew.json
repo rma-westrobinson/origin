@@ -1,20 +1,20 @@
 {
-  "version": "3.0.22",
+  "version": "3.0.23",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Arrows browse again",
-      "text": "With a picture-in-picture window showing, the arrow keys no longer jump to it. They move around the page, and when they reach an edge they simply stop."
+      "title": "Now called Origin Plus",
+      "text": "The app has a new name: Origin Plus. You will see it on the launcher, on the sign-in page, in Settings and on the screen saver."
     },
     {
       "icon": "g_spark",
-      "title": "Double-click OK to reach the window",
-      "text": "Press OK twice quickly to put the focus on the film or camera window in the corner. Press OK once more to open it full screen."
+      "title": "The original Origin icon",
+      "text": "The original Origin icon is back on the phone, the desktop and the TV home screen."
     },
     {
       "icon": "g_spark",
-      "title": "Swap and leave",
-      "text": "While the window has the focus, Left, Right and Down swap between the film and the camera. Back or Up hands the arrows back to the page."
+      "title": "Gold and black",
+      "text": "Buttons, highlights and focus rings are gold on a black page. If you picked your own accent colour in Settings, you keep it."
     }
   ]
 }

@@ -239,8 +239,11 @@ static const uint32_t ACCENTS[18][4] = {
   { 0x14b8a6, 0x5eead4, 0xb5f5ea, 0x0f766e }, { 0x06b6d4, 0x67e8f9, 0xcffafe, 0x0e7490 },
   { 0x0ea5e9, 0x7dd3fc, 0xbae6fd, 0x0369a1 }, { 0x3b82f6, 0x93b4ff, 0xc4d6ff, 0x1d4ed8 },
   { 0x6366f1, 0xa5b4fc, 0xc7d2fe, 0x4338ca }, { 0x9aa3b5, 0xd3d8e2, 0xeef0f4, 0x525a6c }
-}; /* (round the wheel, then graphite: a cool glassy grey; purple, the first, is the dynamic modes' default) */
-#define ACC_DEFAULT ACCENTS[0]
+}; /* (round the wheel, then graphite: a cool glassy grey) */
+/* The default accent, for the dynamic modes' fallback and any unknown key: Origin Plus gold (main, light, pale, deep). It
+   is not one of the 18 choices, so a user who picked an accent keeps it. Text on it is dark (fg_on), never gold on gold. */
+static const uint32_t ACC_PLUS[4] = { 0xd4af37, 0xe6c86a, 0xf3e3a8, 0x8f7414 };
+#define ACC_DEFAULT ACC_PLUS
 static const uint32_t TINT_GREY[4] = { 0x9aa6bd, 0xc1c9d8, 0xe1e5ee, 0x5d6880 };
 static uint32_t accFrom[5], accTo[5];
 static Timer1 accFade;
@@ -253,7 +256,7 @@ static float lum_of(uint32_t c) {
 }
 static uint32_t fg_on(uint32_t a, uint32_t b) {
   float L = (lum_of(a) + lum_of(b)) / 2;
-  return (1.05f / (L + 0.05f)) >= ((L + 0.05f) / 0.05f) ? 0xffffffffu : 0xff14111cu;
+  return (1.05f / (L + 0.05f)) >= ((L + 0.05f) / 0.05f) ? 0xffffffffu : 0xff121214u;
 }
 static void set_accent(const uint32_t c[4]) {
   uint32_t to[5] = { 0xff000000u | c[0], 0xff000000u | c[1], 0xff000000u | c[2], 0xff000000u | c[3],
@@ -298,7 +301,7 @@ static const uint32_t *fixed_accent(const char *a) {
   for (int i = 0; i < 18; i++)
     if (!strcmp(a, ACCENT_KEYS[i]))
       return ACCENTS[i];
-  return ACCENTS[0];
+  return ACC_DEFAULT;
 }
 /* a swatch made usable as an accent: its own hue and character, lightness/saturation brought into range */
 static void accent_of(const Swatch *w, const Swatch *w2, uint32_t out[4]) {
@@ -490,7 +493,7 @@ void accent_apply(void) {
     set_accent(fixed_accent(accent_mode()));
 }
 /* Dynamic accents ("From the logo", "From the artwork") belong to ONE title: they show on that title's
-   page and in its player; everywhere else the app keeps the default (purple). */
+   page and in its player; everywhere else the app keeps the default (gold). */
 void accent_scope(const char *id, const char *poster, const char *logo) {
   if (id != scopeId) {
     if (id && *id) {
@@ -513,7 +516,7 @@ void accent_scope(const char *id, const char *poster, const char *logo) {
     accent_tint_fetch(scopeId, scopePoster, scopeLogo);
     if (tint_busy(scopeId))
       return;
-  } /* coming in a moment: keep what is shown, no purple flash */
+  } /* coming in a moment: keep what is shown, no gold flash */
   set_accent(ACC_DEFAULT);
 }
 
@@ -704,7 +707,7 @@ void app_clock_draw(float right, float y, float alpha) {
     float ph = 76, pw = W + 52, px = x0 - 26,
           py = y + text_line_height(38) / 2 - ph / 2; /* a glass pill behind it, the bar's circles' sister */
     lglass_light(lg_drift_at(113.0f));
-    lglass_shell(px, py, pw, ph, ph / 2, RGBA(14, 14, 22, 120), 0.85f);
+    lglass_shell(px, py, pw, ph, ph / 2, RGBA(17, 17, 17, 120), 0.85f);
     lglass_light(0);
   }
   {

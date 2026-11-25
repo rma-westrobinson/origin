@@ -177,7 +177,7 @@ static void draw_phone(float a) {
   gfx_opacity_push(a);
   gfx_rect(0, 0, SB_W, SB_H, BLACK_A(150));
   hit_act(0, 0, SB_W, SB_H, outside, 0, 0);
-  gfx_rrect(x, y, W, H, 18, RGB(0x1d, 0x1b, 0x26));
+  gfx_rrect(x, y, W, H, 18, RGB(0x1f, 0x1f, 0x1f));
   hit_shield(x, y, W, H);
   float ty = y + pad;
   text_draw(Q.done ? Q.doneTitle : Q.title, x + pad, ty, 19, 800, WHITE_A(250), -0.2f, W - 2 * pad, ALIGN_LEFT);
@@ -294,7 +294,7 @@ static void draw(void) {
     if (!Q.url[0] || !qr_draw(Q.url, qx, yy, 280, 18, 10)) { /* no network address: said in the code's place */
       gfx_rrect(qx, yy, 280, 280, 18, WHITE_A(255));
       text_draw_wrapped(T("No internet connection"), cx, yy + 140 - text_line_height(24), 240, 2, 24, 600,
-                        RGB(0x16, 0x14, 0x1d), 0, ALIGN_CENTER, p_lh());
+                        RGB(0x18, 0x18, 0x18), 0, ALIGN_CENTER, p_lh());
     }
     yy += 280;
     if (Q.shown[0])

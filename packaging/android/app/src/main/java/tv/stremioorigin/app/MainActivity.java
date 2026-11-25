@@ -192,7 +192,7 @@ public class MainActivity extends SDLActivity {
     }
 
     // ---- phones and tablets (src/platform/android/bridge_android.c calls these from the app's thread) ----
-    static final int PAGE = 0xff0c0b11;   /* the app's page colour (app.h PAGE): the bars blend into it */
+    static final int PAGE = 0xff121214;   /* the app's page colour (app.h PAGE): the bars blend into it */
     int browseOrientation() { return tablet ? ActivityInfo.SCREEN_ORIENTATION_FULL_USER : ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT; }
     /* SDL turns the screen as its window asks once it is made; on a phone or tablet the app decides instead */
     @Override public void setOrientationBis(int w, int h, boolean resizable, String hint) { if (!touch) super.setOrientationBis(w, h, resizable, hint); }

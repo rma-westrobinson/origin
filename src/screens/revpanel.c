@@ -836,7 +836,7 @@ static float chip(float x, float y, const char *s, float f, int cur, int rtl) { 
   float w = text_width(s, 22, 700, 0.3f) + 36, h = 14 + text_line_height(22), cx = rtl ? x - w : x;
   if (f < 0.999f) {
     gfx_shadow(cx, y + 4, w, h, h / 2, 18, BLACK_A(110));
-    gfx_rrect(cx, y, w, h, h / 2, cur ? acc_a(0.55f) : RGBA(14, 12, 20, 178));
+    gfx_rrect(cx, y, w, h, h / 2, cur ? acc_a(0.55f) : RGBA(15, 15, 15, 178));
     gfx_rrect_v(cx, y, w, h, h / 2, WHITE_A(26), WHITE_A(6));
     gfx_ring(cx, y, w, h, h / 2, 1, WHITE_A(46));
   }
@@ -1184,7 +1184,7 @@ static void draw_left(float x, float top, int rtl) {
         float bx = rtl ? cx - ox : cx + ox, bl = rtl ? bx - ws[i] : bx;
         hit_add(bl, cy, ws[i], chh, NULL, sw_act, i, 0);
         gfx_shadow(bl, cy + 4, ws[i], chh, chh / 2, 18, BLACK_A(110));
-        gfx_rrect(bl, cy, ws[i], chh, chh / 2, RGBA(14, 12, 20, 178));
+        gfx_rrect(bl, cy, ws[i], chh, chh / 2, RGBA(15, 15, 15, 178));
         gfx_ring(bl, cy, ws[i], chh, chh / 2, 1, WHITE_A(46));
       }
       {

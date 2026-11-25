@@ -46,7 +46,7 @@ float key_hint(float x, float y, int key, const char *label, uint32_t col,
    an hour per address without an account, and a home's TV shares that with every other device there. It names only the
    webOS IPK; every other package has its own file in the same form (from 3.0.9: updates/<appid>/<kind>.json, e.g.
    windows_setup.exe.json). The release list is asked only when the website has nothing for this package. */
-/* This fork (Stremio Plus) is signed with its own key, so the upstream website's manifests must never name its update:
+/* This fork (Origin Plus) is signed with its own key, so the upstream website's manifests must never name its update:
    the release list of the fork's own repository (UPD_GH) is the only source, unless a development manifest is given. */
 #define UPD_SITE 0
 #define UPD_MAN "https://betterstremio.github.io/webos/api/apps/" SB_APP_ID "/manifest.json"
