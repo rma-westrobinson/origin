@@ -239,6 +239,7 @@ void campip_hide(int hide) {
 /* one window shows at a time and both stay alive: the visible one is hidden (its camera or film kept), the other comes */
 void campip_swap(void) {
   int film = player_mini();
+  int f = F; /* (campip_hide(1) lets go of the focus when the camera hides: the swap keeps it, whichever window leaves) */
   if (C.open && !C.hidden && film) {
     campip_hide(1);
     player_mini_hide(0);
@@ -252,7 +253,7 @@ void campip_swap(void) {
     return;
   } else
     return;
-  if (F)
+  if (f)
     F = campip_visible() ? 2 : 1;
 }
 void campip_tick(void) {
