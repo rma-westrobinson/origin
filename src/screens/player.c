@@ -2823,7 +2823,7 @@ static void build_btns(void) {
     B("aud", "p_aud", T("Audio"), 0);
   const char *am = !strcmp(P.aspect, "fill") ? "Fill the screen" : !strcmp(P.aspect, "zoom") ? "Zoom" : "Original";
   B("asp", "p_asp", T(am), 0);
-  if (!P.isTrailer && party_available())
+  if (!P.isTrailer && (party_available() || party_active())) /* in a party: always, it is the way to Chat and Leave */
     B("party", "set_party", T("Watch party"), 0); /* core/party.h */
   if (!P.isTrailer && campip_available() && cam_count() > 0)
     B("cam", "set_cam", T("Camera in the corner"), 0); /* a security camera floats over the film (screens/campip.h) */
@@ -9291,6 +9291,8 @@ static const char *ph_item_label(const char *id, char *buf, size_t cap) {
              !strcmp(P.aspect, "fill")   ? T("Fill")
              : !strcmp(P.aspect, "zoom") ? T("Zoom")
                                          : T("Original"));
+  else if (!strcmp(id, "party"))
+    snprintf(buf, cap, "%s", T("Watch party"));
   else if (!strcmp(id, "nxt"))
     snprintf(buf, cap, "%s", T("Next episode"));
   else
@@ -9303,6 +9305,7 @@ static const char *ph_item_icon(const char *id) {
          : !strcmp(id, "eps")  ? "p_eps"
          : !strcmp(id, "aud")  ? "p_aud"
          : !strcmp(id, "asp")  ? "p_asp"
+         : !strcmp(id, "party") ? "set_party"
          : !strcmp(id, "nxt")  ? "p_next"
          : !strcmp(id, "src")  ? "p_src"
                                : "p_subs";
@@ -9379,6 +9382,8 @@ static void ph_geo(void) {
     ids[n++] = "subs";
   if (!trailer && ph_audio_n() >= 2)
     ids[n++] = "aud";
+  if (!trailer && (party_available() || party_active())) /* kept in the row (never moved to the menu) while in a party */
+    ids[n++] = "party";
   ids[n++] = "asp";
   if (!trailer)
     ids[n++] = P.next.has ? "nxt" : "src";

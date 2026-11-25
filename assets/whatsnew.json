@@ -1,10 +1,10 @@
 {
-  "version": "3.0.28",
+  "version": "3.0.29",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Watch parties start with invites off",
-      "text": "Starting a watch party no longer needs Get watch party invites switched on. That setting now only decides whether invite cards from other devices appear."
+      "title": "Watch party button stays in the player",
+      "text": "While you are in a watch party, the Watch party button now always shows in the player, on the phone as well as the TV, so you can reach Chat, Invite and Leave."
     }
   ]
 }
