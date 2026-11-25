@@ -19,6 +19,7 @@
 #include "ui/palette.h"
 #include "screens/player.h"
 #include "screens/cameras.h"
+#include "screens/camgrid.h"
 #include "screens/campip.h"
 #include "screens/saver.h"
 #include "core/hit.h"
@@ -2530,6 +2531,7 @@ void app_away_tick(void) {
   if (!pipUp && (leave || (app_away() && !awayHandled))) {
     int stream = player_away();
     camview_close(); /* a camera is let go: its connection and its decoder */
+    camgrid_close(); /* the grid's cameras too */
     campip_close();
     btr_release();
     phone_peek_shut_now();
@@ -2744,7 +2746,7 @@ void app_ambient_draw(void) {
     ambient_draw();
 } /* (the guide's, once a frame) */
 static void page_draw(void) {
-  if ((welcome_covers() || camview_covers()) && app_overlay && app_overlay->draw) {
+  if ((welcome_covers() || camview_covers() || camgrid_covers()) && app_overlay && app_overlay->draw) {
     app_overlay->draw();
     return;
   } /* the guide's page hides all of it */

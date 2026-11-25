@@ -39,6 +39,7 @@
 #include "screens/welcome.h"
 #include "screens/cameras.h"
 #include "screens/campip.h"
+#include "screens/camgrid.h"
 #include <ctype.h>
 #include "ui/qr.h"
 #define SET_FOCUS RGB(0xd9, 0xd9, 0xd9)
@@ -135,7 +136,7 @@ static const Opt ACCENT_OPTS[] = { { "logo", "From the logo" },
 #define NCAT 14
 #define MAXROWS 48
 static Setting recsS[12], partyS[2];
-static Setting camS[CAM_MAX + 7], playBase[9], playS[9], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
+static Setting camS[CAM_MAX + 8], playBase[9], playS[9], subsS[9], audS[6], lookS[4], langS[2], keyS[5], addonS[40], acctS[1], supS[7],
     profS[4];
 static Opt subProviderOpts[ADDONS_MAX + 1];
 static char subProviderKeys[ADDONS_MAX][SUBS_PROVIDER_KEY_SIZE], subProviderNames[ADDONS_MAX][96];
@@ -399,13 +400,17 @@ static int cams_opts(void) {
                                 : T("OK to watch, Right to edit"));
     s->raw = 1; /* (the camera's own words: not translated) */
   }
+  int cams = n; /* (the rows after the cameras that need one: n counts them too) */
+  if (camgrid_supported())
+    set_act(&camS[n++], "__camGrid", "Show all cameras at once",
+            "A full screen grid with every camera live. OK on one opens it full screen");
   set_act(&camS[n++], "__camPhone", "Add a camera from your phone",
           "Scan a code, then type the stream address and the camera account on your phone");
   set_act(&camS[n++], "__camTv", "Add a camera on the TV", "Type the camera's address with the remote");
-  if (campip_available() && n > 2)
+  if (campip_available() && cams > 0)
     set_act(&camS[n++], "__camPip", campip_active() ? "Close the camera in the corner" : "Float a camera in the corner",
             "Shows the last camera you watched in a small window while you browse or watch a film");
-  if (campip_available() && n > 2) {
+  if (campip_available() && cams > 0) {
     set_s(&camS[n++], "camSound", "Camera sound", "The camera's microphone, in the corner and in the full screen view. Yellow key: on and off", OO, 2, "true");
     set_s(&camS[n++], "camVol", "Camera volume", "Up and Down in the full screen view; the channel keys on the focused corner window", SVOL, 10, "100");
     set_s(&camS[n++], "camFilmMix", "Film volume under the camera",
@@ -1545,7 +1550,9 @@ static int key(int k) {
       }
       if (!strncmp(op->k, "__cam", 5)) {
         Camera c;
-        if (!strcmp(op->k, "__camPip")) {
+        if (!strcmp(op->k, "__camGrid"))
+          camgrid_open();
+        else if (!strcmp(op->k, "__camPip")) {
           campip_toggle();
           cams_rows_again(); /* (its row says close now, or float) */
         } else if (!strcmp(op->k, "__camPhone"))

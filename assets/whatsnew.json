@@ -1,10 +1,10 @@
 {
-  "version": "3.0.26",
+  "version": "3.0.27",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Continue Watching in the right order",
-      "text": "Continue Watching now lists titles by when you last watched them, most recent first, the same as Stremio Web. Edits and syncs no longer move a title up the row."
+      "title": "All your cameras at once",
+      "text": "Settings > Cameras has a new row, Show all cameras at once. It opens a full screen grid with every camera live. Move between them with the arrow keys or tap one, and OK opens it full screen. Back returns to the grid."
     }
   ]
 }

@@ -78,6 +78,7 @@ public class MainActivity extends SDLActivity {
         box = new Box(this);
         SbPlayer.attach(this, box);            // the video frame and the subtitle view, under SDL's layout
         SbCam.attach(this, box);               // the second player (a camera in the corner), added after the film's: drawn over it
+        SbCamGrid.attach(this, box);           // the camera grid's cells, over the corner camera
         box.addView(mLayout, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(box);
     }
@@ -383,6 +384,7 @@ public class MainActivity extends SDLActivity {
     @Override protected void onDestroy() {
         SbPlayer.release();
         SbCam.release();
+        SbCamGrid.release();
         super.onDestroy();
         Log.i(TAG, "activity gone: ending the process");
         android.os.Process.killProcess(android.os.Process.myPid());

@@ -1,4 +1,5 @@
 #include "screens/campip.h"
+#include "screens/camgrid.h"
 #include "core/app.h"
 #include "core/camvid.h"
 #include "core/form.h"
@@ -158,7 +159,7 @@ int campip_open(const Camera *c) {
     toast(T("A camera in the corner is not possible on this device"), 2600, NULL);
     return 0;
   }
-  if (camview_covers())
+  if (camview_covers() || camgrid_covers())
     return 0;
   char url[360];
   if (!cam_url(c, url, sizeof url)) {
