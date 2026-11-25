@@ -906,10 +906,46 @@ static void menu_rows(void) {
   if (Pt.menuIdx < 0)
     Pt.menuIdx = 0;
 }
+/* the user record came back (or did not): open the menu only if the identity can be made now */
+static void menu_after_user(int ok, const char *err, void *ud) {
+  (void)ok;
+  (void)err;
+  (void)ud;
+  if (party_available() && ident()) {
+    Pt.menu = 1;
+    Pt.menuIdx = 0;
+  } else
+    toast(T("Couldn\xe2\x80\x99t read your Stremio account. Check the connection and try again"), 3500, NULL);
+}
 void party_menu_open(void) {
-  if (!party_available()) {
-    toast(url_ok() ? T("Sign in to Stremio to use watch parties") : T("The watch party server is not set up"), 3500,
+  /* Settings calls this without checking party_available(), so decide here, and say why when it is no. A kept
+     account (acct/stremio.json) is brought back first: the live store has no authKey until it is */
+  if (!acct_is_nuvio() && !sb_auth_key())
+    acct_restore_kept();
+  if (!url_ok()) {
+    toast(T("The watch party server is not set up"), 3500, NULL);
+    return;
+  }
+  if (!enabled()) {
+    toast(T("Watch party invites are switched off. Turn on \xe2\x80\x9c" "Get watch party invites\xe2\x80\x9d in Settings"), 3500,
           NULL);
+    return;
+  }
+  if (acct_is_nuvio()) {
+    toast(acct_other_kept() ? T("Watch parties need a Stremio sign-in. Switch to your Stremio account first")
+                            : T("Watch parties need a Stremio sign-in. This device is using a Nuvio account"),
+          3500, NULL);
+    return;
+  }
+  if (!sb_signed_in()) {
+    toast(T("Sign in to Stremio to use watch parties"), 3500, NULL);
+    return;
+  }
+  if (!ident()) { /* signed in, but the user record (id, email) is missing: fetch it again, then open */
+    char ak[200];
+    snprintf(ak, sizeof ak, "%s", sb_auth_key()); /* (a copy: sb_finish_login stores the key over itself) */
+    toast(T("Getting your Stremio account"), 2000, NULL);
+    sb_finish_login(ak, menu_after_user, NULL);
     return;
   }
   Pt.menu = 1;

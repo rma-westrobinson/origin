@@ -2067,7 +2067,7 @@ static void draw_ep(int i, float x, float y) {
     /* the same dark glass as the episode hint: a small accent dot, then the words, readable on any still */
     float tw = r->tagW, th = 14 + text_line_height(22), tx = app_rtl() ? x + TW - 14 - tw : x + 14, ty0 = y + 14;
     gfx_shadow(tx, ty0 + 4, tw, th, th / 2, 18, BLACK_A(110));
-    gfx_rrect(tx, ty0, tw, th, th / 2, RGBA(15, 15, 15, 178));
+    gfx_rrect(tx, ty0, tw, th, th / 2, RGBA(14, 12, 20, 178));
     gfx_rrect_v(tx, ty0, tw, th, th / 2, WHITE_A(26), WHITE_A(6));
     gfx_ring(tx, ty0, tw, th, th / 2, 1, WHITE_A(46));
     gfx_circle(tx + 22, ty0 + th / 2, 5, ACC2);
@@ -2131,7 +2131,7 @@ static void ep_hint(float x, float y, int rtl) {
   float br = 0.5f - 0.5f * cosf((float)(t * 6.2832 / 3.6)); /* the breath: 3.6 s, slow */
   gfx_opacity_push(a * (0.9f + 0.1f * br));
   gfx_shadow(bx, by + 4, w, h, h / 2, 18, BLACK_A(110));
-  gfx_rrect(bx, by, w, h, h / 2, RGBA(15, 15, 15, 178));
+  gfx_rrect(bx, by, w, h, h / 2, RGBA(14, 12, 20, 178));
   gfx_rrect_v(bx, by, w, h, h / 2, WHITE_A(26), WHITE_A(6));
   gfx_ring(bx, by, w, h, h / 2, 1, WHITE_A(46)); /* dark enough to read on any still */
   {
@@ -2170,7 +2170,7 @@ static void face_wait(float cx, float cy) {
 }
 /* no photo anywhere: a quiet silhouette */
 static void face_none(float x, float y) {
-  gfx_circle(x + 62, y + 62, 62, RGB(0x26, 0x26, 0x26));
+  gfx_circle(x + 62, y + 62, 62, RGB(0x24, 0x21, 0x2e));
   gfx_circle(x + 62, y + 48, 21, WHITE_A(41));
   gfx_clip_push(x, y, 124, 112);
   gfx_rrect(x + 22, y + 78, 80, 70, 40, WHITE_A(41));

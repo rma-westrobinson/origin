@@ -3,7 +3,7 @@
 #include <math.h>
 #include <string.h>
 
-#define SHEET RGB(0x18, 0x18, 0x18)
+#define SHEET RGB(0x16, 0x14, 0x1d)
 /* a texture drawn over the whole of a target (layout units cover its width; its height follows its aspect) */
 static void into(GfxTarget *dst, uint32_t clear, GLuint tex, float u0, float v0, float u1, float v1, uint32_t tint) {
   gfx_target_begin(dst, clear);
@@ -99,7 +99,7 @@ void sglass_bake(SGlass *g, float x, float y, float w, float h) {
     gfx_image(s[1].tex, 0, 0, SB_W, LH, 0, WHITE_A((int)(255 * alpha)), 0, 1, 1, 0);
   /* a dark neutral tint, the accent faint at the edges, a light sheen at the top */
   gfx_rect(0, 0, SB_W, LH,
-           RGBA(19, 19, 19,
+           RGBA(18, 16, 24,
                 112)); /* (a little lighter than before: more of the page's colour comes through the finer glass) */
   /* the page's radial accent (0 in the middle, .03 at 60%, .11 at its rim beyond the corners) as four edge bands */
   float ex = SB_W * 0.3f, ey = LH * 0.3f;
@@ -195,7 +195,7 @@ float lglass_stretch(float *s, float *last, float x, float dt) {
    on), c how far its colours have turned, lit a focused (accent) row */
 void lglass_switch(float x, float y, float w, float h, float k, float c, int lit) {
   float r = h / 2;
-  lglass_shell(x, y, w, h, r, lit ? WHITE_A(40) : RGBA(23, 23, 23, 120), 0.9f);
+  lglass_shell(x, y, w, h, r, lit ? WHITE_A(40) : RGBA(20, 20, 28, 120), 0.9f);
   if (c > 0.004f) {
     if (lit) {
       gfx_rrect(x, y, w, h, r, WHITE_A((int)(235 * c)));
@@ -230,7 +230,7 @@ void lglass_liquid(GLuint t, float x, float y, float w, float h, float r, float 
         sv = 0.32f + 0.1f * sinf(tm * 0.33f + 1.0f + p);
   lglass_light(su - 0.12f);
   if (!t) {
-    lglass_shell(x, y, w, h, r, RGBA(17, 17, 17, 120), k);
+    lglass_shell(x, y, w, h, r, RGBA(14, 14, 22, 120), k);
     return;
   }
   gfx_shadow(x, y + 12, w, h, r, 40, BLACK_A((int)(64 * fminf(k, 1))));
@@ -239,7 +239,7 @@ void lglass_liquid(GLuint t, float x, float y, float w, float h, float r, float 
   lgSoft = 1; /* (the spot's bend grows with the glass: a big sheet takes a pill's) */
   if (dark > 0.004f)
     gfx_rrect(x, y, w, h, r, col_alpha(PAGE | 0xff000000u, fminf(dark, 1)));
-  gfx_rrect(x, y, w, h, r, RGBA(12, 12, 12, (int)(fminf(18 * k, 50))));
+  gfx_rrect(x, y, w, h, r, RGBA(10, 10, 16, (int)(fminf(18 * k, 50))));
   gfx_rrect(x, y, w, h, r, acc_a(0.08f * k));
   gfx_rrect_v(x, y, w, h, r, WHITE_A((int)(fminf(28 * k, 70))), WHITE_A(0));
   gfx_ring(x, y, w, h, r, 1, WHITE_A((int)(fminf(34 * k, 90))));

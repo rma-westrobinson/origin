@@ -161,7 +161,7 @@ void castlink_draw(void) {
         x = SB_W / 2 - w / 2, y = 120 - 16 * (1 - a);
   gfx_opacity_push(a);
   lglass_light(0);
-  lglass_shell(x, y, w, h, h / 2, RGBA(16, 16, 16, 200), 1);
+  lglass_shell(x, y, w, h, h / 2, RGBA(14, 12, 22, 200), 1);
   text_draw(msg, x + 44, y + h / 2 - text_line_height(26) / 2.0f, 26, 600, WHITE_A(220), 0, 0, ALIGN_LEFT);
   text_draw(shown, x + 44 + tw + 30, y + h / 2 - text_line_height(40) / 2.0f, 40, 800, ACC2 | 0xff000000u, 8, 0,
             ALIGN_LEFT);

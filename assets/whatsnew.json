@@ -1,15 +1,15 @@
 {
-  "version": "3.0.24",
+  "version": "3.0.25",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Two corner windows swap in either order",
-      "text": "With a film in the corner and a camera floated after it, Left and Right now swap between the two and the focus stays on the window, the same as when the camera came first."
+      "title": "Watch party tells you why it will not start",
+      "text": "Opening Watch party from Settings now brings back your kept Stremio account first, and says what is wrong when it cannot start: invites switched off, a Nuvio account, or not signed in to Stremio."
     },
     {
       "icon": "g_spark",
-      "title": "Focus stays on the swap",
-      "text": "Swapping from the camera to the film no longer drops the focus, so you can keep swapping without double-clicking OK again."
+      "title": "The original colours are back",
+      "text": "Gold and black is now only the app icon and the logo. Inside the app, the original purple and violet look is back."
     }
   ]
 }

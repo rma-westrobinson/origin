@@ -26,7 +26,7 @@
 /* colours */
 #define PH_TXT RGB(0xf2, 0xf1, 0xf6)
 #define PH_TXT2 RGBA(0xf2, 0xf1, 0xf6, 168)
-#define PH_SURF RGB(0x1f, 0x1f, 0x1f)
+#define PH_SURF RGB(0x1d, 0x1b, 0x26)
 
 void phone_register(void); /* main.c: the phone's screens in place of the TV's (a phone or a tablet only) */
 int phone_owns(int scr); /* that screen is the phone's own (else a TV page shown as it is, for now) */

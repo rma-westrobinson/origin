@@ -430,7 +430,7 @@ static void draw(void) {
       int foc = ph ? touch_pressed(h_foc, h_act, i, 0) : i == P.pad;
       gfx_rrect(x, y, KW, KH, 20 * K, foc ? WHITE_A(240) : WHITE_A(26));
       text_draw(L[i], x + KW / 2, y + KH / 2 - text_line_height((int)(36 * K)) / 2, (int)(36 * K), 700,
-                foc ? RGB(12, 12, 12) : WHITE_A(235), 0, 0, ALIGN_CENTER);
+                foc ? RGB(10, 10, 16) : WHITE_A(235), 0, 0, ALIGN_CENTER);
       if (P.open)
         hit_add(x, y, KW, KH, h_foc, h_act, i, 0);
     }

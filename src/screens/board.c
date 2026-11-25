@@ -3050,7 +3050,7 @@ static void row_arrows(Board *b, Row *r, int ri, float cy, float ch) {
     int lit = app_ptr_over(x, sy + (y - cy), D, D);
     hit_act(x, y, D, D, row_page, ri, fwd ? 1 : -1);
     gfx_opacity_push(show.v);
-    gfx_rrect(x, y, D, D, D / 2, RGBA(16, 16, 16, lit ? 235 : 190));
+    gfx_rrect(x, y, D, D, D / 2, RGBA(14, 12, 22, lit ? 235 : 190));
     gfx_ring(x, y, D, D, D / 2, 1.5f, WHITE_A(lit ? 120 : 50));
     icon_draw(fwd != rtl ? "k_right" : "k_left", x + 18, y + 18, 36, WHITE_A(lit ? 255 : 210));
     gfx_opacity_pop();

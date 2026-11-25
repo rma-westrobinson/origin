@@ -30,7 +30,7 @@ A="$G/app/src/main/assets/app"; mkdir -p "$A"; cp -r "$ROOT/assets" "$A/assets";
 APP_NAME="$(sed -n 's/^#define APP_NAME "\(.*\)"$/\1/p' "$ROOT/src/core/brand.h")"; [ -n "$APP_NAME" ] || { echo "no APP_NAME in src/core/brand.h"; exit 1; }
 mkdir -p "$G/app/src/main/res/values"
 printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="app_name">%s</string></resources>\n' "$APP_NAME" > "$G/app/src/main/res/values/strings.xml"
-# the launcher icon (the original Origin icon, assets/icon.png) and the TV banner (packaging/android/banner.png, the original logo on the page colour: tools/gen-icon.py)
+# the launcher icon (the Origin icon in gold and black, assets/icon.png) and the TV banner (packaging/android/banner.png, the logo on black: tools/gen-icon.py)
 python3 - "$ROOT" "$G/app/src/main/res" <<'PY'
 import sys, os
 from PIL import Image
