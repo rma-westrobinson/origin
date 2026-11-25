@@ -20,7 +20,6 @@ void campip_hide(int hide); /* a film takes the corner: the camera is kept alive
 void campip_swap(void); /* one corner window shows at a time, the film's or the camera's: the other one comes */
 /* the remote's focus on the corner window (app.c): an arrow that moved nothing on the page lands on it, then OK
    expands it, Back/Up gives the focus back (a phone: touch buttons on the window instead) */
-int pip_focus_try(int physicalArrow); /* 1 when the arrow put the focus on a window */
 int pip_focus_summon(void); /* the Blue key, from any screen: the focus goes to the window in the corner; 1 when used */
 int pip_dblok_armed(void); /* a window shows in the corner and has no focus: OK waits for a possible double-click */
 int pip_focus_key(int k); /* a key while a window has the focus; 1 when used */

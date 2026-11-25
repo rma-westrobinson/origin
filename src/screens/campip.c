@@ -356,19 +356,13 @@ int campip_key(int k) {
   return 0;
 }
 
-/* ---- the remote's focus on a corner window (TV): the Blue key (pip_focus_summon) lands on it from anywhere, and so
-   does an arrow that moved nothing on the page (a shortcut, page-dependent); OK expands it, Back or Up gives the
-   focus back to the page. The window's own keys while it has the focus:
+/* ---- the remote's focus on a corner window (TV): a double-click OK (or the Blue key) lands on it from anywhere
+   (pip_focus_summon); an arrow never does, so the arrows browse the page until the window has the focus. OK expands it,
+   Back or Up gives the focus back to the page. The window's own keys while it has the focus:
    Left/Right the previous and next camera, Down the film or the camera (the other window comes, this one is kept),
    Channel keys / FF / Rew the camera's volume, Yellow its sound on and off. ---- */
 static int vis_kind(void) {
   return player_mini_visible() ? 1 : campip_visible() ? 2 : 0;
-}
-static void vis_rect(int which, float *x, float *y, float *w, float *h) {
-  if (which == 1)
-    player_mini_rect(x, y, w, h);
-  else
-    pip_rect(x, y, w, h);
 }
 int pip_focused(void) {
   return F && F == vis_kind();
@@ -390,21 +384,6 @@ int pip_focus_summon(void) {
    second press follows (double-click OK, app.c). Anything else, OK acts at once. */
 int pip_dblok_armed(void) {
   return !form_touch() && !F && vis_kind() != 0;
-}
-int pip_focus_try(int kv) {
-  if (form_touch() || F || player_open() || (kv != K_DOWN && kv != K_LEFT && kv != K_RIGHT))
-    return 0;
-  int w = vis_kind();
-  if (!w)
-    return 0;
-  float x, y, ww, h;
-  vis_rect(w, &x, &y, &ww, &h);
-  float cx = x + ww / 2;
-  if (kv == K_DOWN || (kv == K_RIGHT && cx > SB_W / 2) || (kv == K_LEFT && cx < SB_W / 2)) {
-    F = w;
-    return 1;
-  }
-  return 0;
 }
 static void vol_step(int d) {
   int v = cam_vol() + d;

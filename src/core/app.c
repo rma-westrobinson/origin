@@ -2298,6 +2298,8 @@ static void key_core(int k, int down, int repeat) {
         sound_play(SND_FOCUS);
         return; /* the second press: the focus is on the window; its release is eaten too */
       }
+      if (okPend)
+        ok_pend_flush(); /* the window went while the first OK waited: that OK acts first, this one is a fresh press */
       if (!okPend && pip_dblok_armed()) {
         okPend = 1;
         okPendUp = 0;
@@ -2339,7 +2341,6 @@ static void key_core(int k, int down, int repeat) {
     curKey = k;
     idle_touch_by(why);
   }
-  int kPhys = k; /* (the arrow as pressed: the corner window's side is on the screen, not in the reading order) */
   k = app_mirror_key(k); /* mirrored layout: Left moves forward (every screen sees the logical direction) */
   if (k >= K_LEFT &&
       k <= K_DOWN) { /* an arrow: a tap when the focus moved (a screen's own sound, e.g. a filter, wins) */
@@ -2348,10 +2349,6 @@ static void key_core(int k, int down, int repeat) {
     double t0 = NOW;
     key_dispatch(k, repeat);
     focus_sig(&f1);
-    if (!memcmp(&f0, &f1, sizeof f0) && f1.known && pip_focus_try(kPhys)) {
-      sound_play(SND_FOCUS); /* the arrow moved nothing on the page: the window in the corner has the focus */
-      return;
-    }
     /* the glows lean the way it went: a tab sweeps them across, a step only leans them (held keys, less) */
     if (f1.nav && f1.navIdx != f0.navIdx)
       orbs_pulse(f1.navIdx > f0.navIdx ? ORB_TAB_R : ORB_TAB_L, 0.8f);
