@@ -15,7 +15,7 @@ void party_draw(void); /* once a frame after the toasts: the invite card or the 
 int party_key(int k, int down); /* 1 when the card or menu took the key (all keys, while one is up) */
 int party_click(float x, float y); /* a click or tap on the card or menu: 1 when it took it */
 void party_menu_open(void); /* the Watch party menu (the player's button, Settings, the yellow key) */
-int party_available(void); /* signed in to Stremio, the server set up, and switched on */
+int party_available(void); /* signed in to Stremio, and the server set up (the invites setting does not matter) */
 int party_active(void); /* in a party now */
 void party_leave(void); /* leaves it: the film plays on, unsynced */
 /* The chat sidebar (the player's, opened from the Watch party menu): the party's messages, and a way to write one. A

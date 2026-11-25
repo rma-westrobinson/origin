@@ -98,7 +98,7 @@ static int enabled(void) {
   return strcmp(store_get("partyOn", "true"), "false") != 0;
 }
 int party_available(void) {
-  return enabled() && url_ok() && sb_signed_in() && !acct_is_nuvio();
+  return url_ok() && sb_signed_in() && !acct_is_nuvio(); /* (not enabled(): that only gates incoming invite cards) */
 }
 int party_active(void) {
   return Pt.in;
@@ -633,7 +633,7 @@ static void on_inbox(int status, const unsigned char *body, size_t len, void *ud
     jstr(x, "name", Pt.online[Pt.nonline].name, sizeof Pt.online[0].name);
     Pt.nonline++;
   }
-  cJSON_ArrayForEach(x, cJSON_GetObjectItemCaseSensitive(j, "invites")) {
+  cJSON_ArrayForEach(x, (enabled() ? cJSON_GetObjectItemCaseSensitive(j, "invites") : NULL)) { /* invites off: no cards */
     long id = (long)jnum(x, "id", 0);
     char code[16];
     jstr(x, "code", code, sizeof code);
@@ -924,11 +924,6 @@ void party_menu_open(void) {
     acct_restore_kept();
   if (!url_ok()) {
     toast(T("The watch party server is not set up"), 3500, NULL);
-    return;
-  }
-  if (!enabled()) {
-    toast(T("Watch party invites are switched off. Turn on \xe2\x80\x9c" "Get watch party invites\xe2\x80\x9d in Settings"), 3500,
-          NULL);
     return;
   }
   if (acct_is_nuvio()) {
