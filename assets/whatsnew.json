@@ -1,15 +1,10 @@
 {
-  "version": "3.0.25",
+  "version": "3.0.26",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Watch party tells you why it will not start",
-      "text": "Opening Watch party from Settings now brings back your kept Stremio account first, and says what is wrong when it cannot start: invites switched off, a Nuvio account, or not signed in to Stremio."
-    },
-    {
-      "icon": "g_spark",
-      "title": "The original colours are back",
-      "text": "Gold and black is now only the app icon and the logo. Inside the app, the original purple and violet look is back."
+      "title": "Continue Watching in the right order",
+      "text": "Continue Watching now lists titles by when you last watched them, most recent first, the same as Stremio Web. Edits and syncs no longer move a title up the row."
     }
   ]
 }

@@ -1656,8 +1656,9 @@ int lib_cw_items_k(ItemList *out, int kind) {
       picks = grow;
       cap = ncap;
     }
-    double recency = watched > 0 ? watched : tms(cJSON_GetObjectItemCaseSensitive(it, "_mtime"));
-    picks[n++] = (CwPick){ it, recency };
+    /* actual last watch time only, as Stremio Web orders it; _mtime moves on any edit or sync, so it is no fallback
+       (a title with no lastWatched sorts last) */
+    picks[n++] = (CwPick){ it, watched };
   }
   if (n)
     qsort(picks, n, sizeof *picks, cmp_cw);
