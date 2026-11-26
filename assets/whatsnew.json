@@ -1,10 +1,10 @@
 {
-  "version": "3.0.33",
+  "version": "3.0.34",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Stronger violet page background",
-      "text": "The page background is now a deeper violet you can actually see."
+      "title": "Search loads more as you scroll",
+      "text": "Scroll to the bottom of the search results and more titles load in, instead of stopping at about two dozen."
     }
   ]
 }

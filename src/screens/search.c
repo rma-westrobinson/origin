@@ -23,7 +23,9 @@
 
 #define SKEYS SEARCH_KEYS
 #define NK SEARCH_NK
-#define SMAX 24
+#define SMAX 60 /* results kept: 15 rows of four. Appended pages stop here (an Item is ~3 KB, its poster address 0.5 KB) */
+#define SMEMMAX 24 /* what the in-memory search cache keeps of a query (its first pages): unchanged from before paging */
+#define SPAGE 10 /* a catalog's page: fewer than this and it has no more (when it does not say hasMore) */
 #define NCAT 16
 #define SGC 4
 #define SROWH 456.0f /* the scroll step per row (the web's; its rows lie 420 apart) */
@@ -43,6 +45,11 @@ static struct {
   int nsug;
   int loading, final;
   ItemList top, cat[NCAT];
+  CatalogDef defs[NCAT]; /* what each catalog was asked with, for its further pages */
+  struct {
+    int got, n0, busy, done; /* raw items received (the next skip), kept in the first page, page out, no more */
+  } pg[NCAT];
+  int keepFocus; /* a page was just appended: the focused poster keeps its place whatever the order */
   int topDone, ncat, catDone[NCAT], topFail, catFail[NCAT], allFailed;
   double liveAt, catAt;
   int livePending, catPending;
@@ -202,9 +209,10 @@ static void smem_put(const char *q, const ItemList *l) {
   } /* the same query, else the oldest */
   SMem *m = &smem[at];
   free(m->items);
-  m->items = malloc(l->n * sizeof(Item));
-  memcpy(m->items, l->items, l->n * sizeof(Item));
-  m->n = l->n;
+  int kn = l->n < SMEMMAX ? l->n : SMEMMAX;
+  m->items = malloc(kn * sizeof(Item));
+  memcpy(m->items, l->items, kn * sizeof(Item));
+  m->n = kn;
   snprintf(m->q, sizeof m->q, "%s", k);
   memcpy(m->sug, S.sug, sizeof m->sug);
   m->nsug = S.nsug;
@@ -457,8 +465,12 @@ static void merge(void) {
     ADD(&S.top.items[i]);
   for (int j = 0; j < 40 && n < SMAX; j++)
     for (int c = 0; c < S.ncat && n < SMAX; c++)
-      if (j < S.cat[c].n)
+      if (j < S.cat[c].n && j < S.pg[c].n0)
         ADD(&S.cat[c].items[j]); /* the catalogs take turns */
+  for (int k = 0; k < SMAX && n < SMAX; k++) /* then the further pages, after everything the first ones gave */
+    for (int c = 0; c < S.ncat && n < SMAX; c++)
+      if (S.pg[c].n0 + k < S.cat[c].n)
+        ADD(&S.cat[c].items[S.pg[c].n0 + k]);
 #undef ADD
   if (strcmp(S.askedQ, S.q)) {
     int k = 0;
@@ -467,6 +479,13 @@ static void merge(void) {
         out[k++] = out[i];
     n = k;
   } /* typed on since: what still fits */
+  int fAt = -1; /* a page was appended: the focused poster is found again by its id */
+  if (S.keepFocus && S.zone == 2 && S.ri < S.items.n)
+    for (int i = 0; i < n; i++)
+      if (!strcmp(out[i].id, S.items.items[S.ri].id)) {
+        fAt = i;
+        break;
+      }
   int changed = n != S.items.n;
   for (int i = 0; !changed && i < n; i++)
     if (strcmp(out[i].id, S.items.items[i].id))
@@ -474,6 +493,8 @@ static void merge(void) {
   itemlist_clear(&S.items);
   S.items.items = out;
   S.items.n = n;
+  if (fAt >= 0)
+    S.ri = fAt;
   for (int i = 0; i < n; i++)
     sb_poster_of(&out[i], S.pu[i], sizeof S.pu[i]);
   if (changed && n)
@@ -569,9 +590,66 @@ static void on_cat(ItemList *l, int cached, void *ud) {
       S.nEmpty++;
   }
   S.cat[c] = *l;
+  S.pg[c].got = l->n;
+  S.pg[c].n0 = l->n;
+  S.pg[c].busy = 0;
+  S.pg[c].done = S.catFail[c] || l->n < SPAGE; /* a short first page: nothing more to ask */
   free(l);
   S.catDone[c] = 1;
   merge();
+}
+/* a further page of a catalog: appended after what it gave, the merge puts it after everything shown */
+static void on_page(ItemList *l, int more, void *ud) {
+  uintptr_t t = (uintptr_t)ud;
+  int c = (int)(t & 31);
+  if ((unsigned)(t >> 5) != (S.tok & 0x7ffffff) || c >= S.ncat || !S.pg[c].busy) {
+    itemlist_free(l);
+    return;
+  }
+  S.pg[c].busy = 0;
+  if (!l || l->total < 0 || !l->n) { /* failed or empty: this catalog is finished (never asked again) */
+    S.pg[c].done = 1;
+    itemlist_free(l);
+    return;
+  }
+  Item *grown = realloc(S.cat[c].items, (S.cat[c].n + l->n) * sizeof(Item));
+  if (!grown) {
+    S.pg[c].done = 1;
+    itemlist_free(l);
+    return;
+  }
+  memcpy(grown + S.cat[c].n, l->items, l->n * sizeof(Item));
+  S.cat[c].items = grown;
+  S.cat[c].n += l->n;
+  S.pg[c].got += l->n;
+  S.pg[c].done = more == 0 || (more < 0 && l->n < SPAGE);
+  SSTAT("catalog %d page: %d more titles (%d so far)", c, l->n, S.pg[c].got);
+  itemlist_free(l);
+  S.keepFocus = 1;
+  merge();
+  S.keepFocus = 0;
+}
+/* the focus is in the last two rows: ask each catalog that has more for its next page (once each, all out together) */
+static void page_more(void) {
+  if (S.zone != 2 || !S.catGone || !S.final || S.ncat <= 0 || S.items.n >= SMAX || strcmp(S.askedQ, S.q))
+    return;
+  if (S.ri / SGC < (S.items.n - 1) / SGC - 1)
+    return;
+  int open = 0;
+  for (int c = 0; c < S.ncat; c++) {
+    if (S.pg[c].busy)
+      return; /* a page is still out */
+    if (!S.pg[c].done)
+      open = 1;
+  }
+  if (!open)
+    return;
+  for (int c = 0; c < S.ncat; c++)
+    if (!S.pg[c].done) {
+      S.pg[c].busy = 1;
+      sb_catalog_page(&S.defs[c], S.pg[c].got, on_page,
+                      (void *)(uintptr_t)(((uintptr_t)(S.tok & 0x7ffffff) << 5) | (uintptr_t)c));
+    }
 }
 static void urlenc(const char *s, char *out, size_t cap) {
   size_t o = 0;
@@ -608,6 +686,7 @@ static void live(void) {
     itemlist_clear(&S.cat[c]);
   }
   S.ncat = 0;
+  memset(S.pg, 0, sizeof S.pg); /* a new query: pagination starts over */
   S.drawn = 1;
   if (!*p) {
     itemlist_clear(&S.items);
@@ -643,12 +722,16 @@ static void cat_go(void) {
       memset(&defs[n], 0, sizeof defs[n]);
       snprintf(defs[n].type, sizeof defs[n].type, "%s", ty[i]);
       snprintf(defs[n].url, sizeof defs[n].url, CINEMETA "/catalog/%s/top/search=%s.json", ty[i], enc);
+      snprintf(defs[n].path, sizeof defs[n].path, CINEMETA "/catalog/%s/top", ty[i]);
+      snprintf(defs[n].extra, sizeof defs[n].extra, "search=%s", enc);
       n++;
     }
   }
   for (int c = 0; c < S.ncat; c++)
     itemlist_clear(&S.cat[c]);
   S.ncat = n;
+  memset(S.pg, 0, sizeof S.pg);
+  memcpy(S.defs, defs, n * sizeof defs[0]);
   S.catGone = 1;
   S.tCats = (int)((app_now() - qAt) * 1000);
   for (int c = 0; c < n; c++)
@@ -949,6 +1032,7 @@ static void tick(float dt) {
   }
   phone_tick();
   voice_tick();
+  page_more();
   int act = !topNav.active;
   float x, y, w;
   key_rect(key_at(S.kr, S.kc), &x, &y, &w);
