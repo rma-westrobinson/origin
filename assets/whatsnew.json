@@ -1,10 +1,10 @@
 {
-  "version": "3.0.31",
+  "version": "3.0.32",
   "items": [
     {
       "icon": "g_spark",
-      "title": "No screensaver on phones and tablets",
-      "text": "The screensaver no longer starts on a phone or tablet. Your device\u2019s own screen timeout and lock take care of idle."
+      "title": "New logo and violet tint",
+      "text": "The app has a refreshed logo, and the violet page background is back."
     }
   ]
 }

@@ -218,6 +218,6 @@ void app_quit(void);
 int app_quitting(void);
 
 /* the page colour */
-#define PAGE RGB(18, 18, 20)
+#define PAGE RGB(12, 11, 17)
 #define UPD_DOT RGB(0xf2, 0xf2, 0xf2) /* an update waiting: a plain white dot, never a title's colour */
 #endif
