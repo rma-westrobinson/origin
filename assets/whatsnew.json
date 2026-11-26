@@ -1,10 +1,10 @@
 {
-  "version": "3.0.32",
+  "version": "3.0.33",
   "items": [
     {
       "icon": "g_spark",
-      "title": "New logo and violet tint",
-      "text": "The app has a refreshed logo, and the violet page background is back."
+      "title": "Stronger violet page background",
+      "text": "The page background is now a deeper violet you can actually see."
     }
   ]
 }
