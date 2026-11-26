@@ -1408,6 +1408,10 @@ static void lib_store(cJSON *it, int push) {
   now_iso(iso, sizeof iso);
   cJSON_DeleteItemFromObjectCaseSensitive(it, "_mtime");
   cJSON_AddStringToObject(it, "_mtime", iso);
+  /* local-only mark (never sent): this save did not go to the account, so the account's copy may be the true one */
+  cJSON_DeleteItemFromObjectCaseSensitive(it, "_unpushed");
+  if (!push)
+    cJSON_AddBoolToObject(it, "_unpushed", 1);
   libVer++;
   store_set_node("lib", store_node("lib"));
   if (push)
@@ -2304,11 +2308,20 @@ unsigned sb_lib_sync_age(void) {
   return libSyncT ? SDL_GetTicks() - libSyncT : 0xffffffffu;
 }
 
-/* two-way sync with the account, newest _mtime wins */
+/* two-way sync with the account, newest _mtime wins, except that progress saved here and never sent does not win:
+   a local copy newer than the account's is the account's to replace when it is only such progress (the _unpushed
+   mark), or on the first pull after the 3.0.35 update (syncFix35), which repairs libraries already diverged. A copy
+   saved in the last two minutes is left alone: it is being played, or its push is on the way */
+static int account_wins(const cJSON *loc, double rm) {
+  double lm = tms(cJSON_GetObjectItemCaseSensitive(loc, "_mtime"));
+  if (lm <= rm || (double)time(NULL) * 1000 - lm < 120000)
+    return 0;
+  return js_bool(loc, "_unpushed", 0) || !strcmp(store_get("syncFix35", ""), "");
+}
 typedef struct {
   void (*cb)(int, void *);
   void *ud;
-  int changed, gen;
+  int changed, gen, bad;
   char ids[500][64];
   int nwant, at;
 } PullReq;
@@ -2323,6 +2336,8 @@ static void on_pull_get(int st, const unsigned char *b, size_t n, void *ud) {
   }
   cJSON *j = st == 200 ? net_json(b) : NULL;
   const cJSON *items = js_arr(j, "result"), *it;
+  if (!items)
+    r->bad = 1;
   if (items)
     cJSON_ArrayForEach(it, items) {
       const char *id = js_str(it, "_id", NULL);
@@ -2339,6 +2354,8 @@ static void pull_next(PullReq *r) {
   if (r->at >= r->nwant) {
     if (lib_migrate_legacy())
       r->changed = 1;
+    if (!r->bad && strcmp(store_get("syncFix35", ""), "1")) /* the one-time repair is done only when every fetch came */
+      store_set("syncFix35", "1");
     if (r->changed) {
       libVer++;
       store_set_node("lib", store_node("lib"));
@@ -2401,7 +2418,7 @@ static void on_pull_meta(int st, const unsigned char *b, size_t n, void *ud) {
       continue;
     cJSON_AddNumberToObject(remote, id, mt);
     cJSON *loc = cJSON_GetObjectItemCaseSensitive(lib, id);
-    if ((!loc || tms(cJSON_GetObjectItemCaseSensitive(loc, "_mtime")) < mt) && nw < 2000) {
+    if ((!loc || tms(cJSON_GetObjectItemCaseSensitive(loc, "_mtime")) < mt || account_wins(loc, mt)) && nw < 2000) {
       copy_str(wants[nw].id, 64, id);
       wants[nw].mt = mt;
       nw++;
@@ -2416,10 +2433,13 @@ static void on_pull_meta(int st, const unsigned char *b, size_t n, void *ud) {
     if (!id || !strcmp(js_str(it, "type", ""), "other"))
       continue;
     const cJSON *rm = cJSON_GetObjectItemCaseSensitive(remote, id);
-    int go = rm ? tms(cJSON_GetObjectItemCaseSensitive(it, "_mtime")) > rm->valuedouble
+    int go = rm ? tms(cJSON_GetObjectItemCaseSensitive(it, "_mtime")) > rm->valuedouble &&
+                      !account_wins(it, rm->valuedouble)
                 : (!js_bool(it, "removed", 0) || js_bool(it, "temp", 0));
     if (go && np < 100) {
-      cJSON_AddItemToArray(push, cJSON_Duplicate(it, 1));
+      cJSON *cp = cJSON_Duplicate(it, 1);
+      cJSON_DeleteItemFromObjectCaseSensitive(cp, "_unpushed");
+      cJSON_AddItemToArray(push, cp);
       np++;
     }
   }
@@ -2446,6 +2466,8 @@ static void on_pull_meta(int st, const unsigned char *b, size_t n, void *ud) {
     wants[k + 1] = w;
   }
   r->nwant = nw > 500 ? 500 : nw;
+  if (nw > 500)
+    r->bad = 1; /* not all fetched this time: the one-time repair waits for the next pull */
   for (int i = 0; i < r->nwant; i++)
     copy_str(r->ids[i], 64, wants[i].id);
   r->at = 0;

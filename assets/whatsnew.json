@@ -1,10 +1,10 @@
 {
-  "version": "3.0.34",
+  "version": "3.0.35",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Search loads more as you scroll",
-      "text": "Scroll to the bottom of the search results and more titles load in, instead of stopping at about two dozen."
+      "title": "Continue Watching order fixed",
+      "text": "Titles you watched a while ago no longer jump to the front of Continue Watching. The order now matches Stremio Web."
     }
   ]
 }
