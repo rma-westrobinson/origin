@@ -10,6 +10,7 @@
 #include "screens/player.h"
 #include "core/app.h"
 #include "core/i18n.h"
+#include "core/form.h"
 #include "core/store.h"
 #include "ui/gfx.h"
 #include "ui/text.h"
@@ -294,6 +295,8 @@ void saver_tick(float dt) {
     if (now < SS.checkAt)
       return;
     SS.checkAt = now + 10;
+    if (form_touch())
+      return; /* a phone or tablet never starts it (nor the dim): its own screen timeout and lock handle idle */
     double m = atof(store_get("ssDelay", "5"));
     if (m <= 0 || (player_open() && !player_paused()) || app_idle() < m * 60 || dimOn)
       return;

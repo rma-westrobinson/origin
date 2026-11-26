@@ -1,10 +1,10 @@
 {
-  "version": "3.0.30",
+  "version": "3.0.31",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Type badges in search results",
-      "text": "Each search result now shows a small Movie, TV or YouTube badge on its poster, so you can tell the kinds apart at a glance."
+      "title": "No screensaver on phones and tablets",
+      "text": "The screensaver no longer starts on a phone or tablet. Your device\u2019s own screen timeout and lock take care of idle."
     }
   ]
 }

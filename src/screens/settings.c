@@ -682,8 +682,10 @@ static void build(void) {
   set_s(&lookS[1], "catalogueTab", "Catalogue tab",
         "Collections and your addons\xe2\x80\x99 catalogues in their own tab", OO, 2, "true");
   set_s(&lookS[2], "animeTab", "Anime tab", "Anime in its own tab. Uses Anime Kitsu on this device.", OO, 2, "false");
-  set_s(&lookS[3], "ssDelay", "Screensaver", "After a while without a key, the titles of the moment fill the screen",
-        SS_OPTS, 5, "5");
+  int nlook = 3;
+  if (!form_touch()) /* (the saver never starts on a phone or tablet, so no row there) */
+    set_s(&lookS[nlook++], "ssDelay", "Screensaver", "After a while without a key, the titles of the moment fill the screen",
+          SS_OPTS, 5, "5");
   /* language names are shown in their own language, never translated */
   set_s(&langS[0], "uiLang", "Language", "The app restarts in the new language", NULL, 0, "auto");
   {
@@ -744,7 +746,7 @@ static void build(void) {
     { "Watch", "Subtitles", "set_subs", "Language, size, colour, opacity, background", "subs", subsS, 9, 0 },
     { "Watch", "Audio", "set_aud", "Default audio language, DTS, interface sounds", NULL, audS, naud, 0 },
     { "Watch", "For You", "g_spark", "Recommendations on Home, region, languages", NULL, recsS, nr, 0 },
-    { "Screens", "Appearance", "set_look", "Accent colour, Catalogue tab, Anime tab", "look", lookS, 4, 0 },
+    { "Screens", "Appearance", "set_look", "Accent colour, Catalogue tab, Anime tab", "look", lookS, nlook, 0 },
     { "Screens", "Language", "set_lang", "The language of the app", NULL, langS, nl, 0 },
     { "Account and system", "Account", "set_acct", "Stremio or Nuvio, and your profiles", NULL, profS, nprof, 0 },
     { "Account and system", "Addons", "set_addon", "", NULL, addonS, na, 0 },
