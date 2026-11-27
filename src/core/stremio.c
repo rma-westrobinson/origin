@@ -1506,6 +1506,14 @@ static void item_from_lib(Item *out, const cJSON *l) {
   double d = js_num(s, "duration", 0), t = js_num(s, "timeOffset", 0);
   out->progress = d > 0 ? (float)(t / d) : 0;
   out->left = d > 0 ? (float)((d - t) / 60000.0) : 0;
+  /* TEMPORARY v3.0.37 diagnostic: the raw stored lastWatched, unparsed (string as stored, number as %.17g, else none) */
+  const cJSON *lw = cJSON_GetObjectItemCaseSensitive(s, "lastWatched");
+  if (cJSON_IsString(lw) && lw->valuestring)
+    copy_str(out->lw, sizeof out->lw, lw->valuestring);
+  else if (cJSON_IsNumber(lw))
+    snprintf(out->lw, sizeof out->lw, "%.17g", lw->valuedouble);
+  else
+    copy_str(out->lw, sizeof out->lw, "none");
 }
 typedef struct {
   const cJSON *item;
