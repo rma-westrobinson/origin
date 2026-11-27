@@ -17,7 +17,6 @@ typedef struct {
   int cw;
   int ep, anime;
   char epName[256]; /* an episode card on a title page: its menu offers the streams */
-  char lw[64]; /* TEMPORARY v3.0.37 diagnostic: the raw stored state.lastWatched of a Continue Watching card; remove with its draw in card_body */
 } Item;
 typedef struct {
   Item *items;

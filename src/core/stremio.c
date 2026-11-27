@@ -56,6 +56,8 @@ static double tms(const cJSON *v) { /* _mtime as epoch ms or ISO text */
     int ms = 0;
     if (sscanf(v->valuestring, "%d-%d-%dT%d:%d:%d.%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min,
                &tm.tm_sec, &ms) >= 6) {
+      while (ms >= 1000) /* the fraction counts for milliseconds only: keep its first 3 digits */
+        ms /= 10;
       tm.tm_year -= 1900;
       tm.tm_mon -= 1;
       return (double)timegm(&tm) * 1000 + ms;
@@ -1506,14 +1508,6 @@ static void item_from_lib(Item *out, const cJSON *l) {
   double d = js_num(s, "duration", 0), t = js_num(s, "timeOffset", 0);
   out->progress = d > 0 ? (float)(t / d) : 0;
   out->left = d > 0 ? (float)((d - t) / 60000.0) : 0;
-  /* TEMPORARY v3.0.37 diagnostic: the raw stored lastWatched, unparsed (string as stored, number as %.17g, else none) */
-  const cJSON *lw = cJSON_GetObjectItemCaseSensitive(s, "lastWatched");
-  if (cJSON_IsString(lw) && lw->valuestring)
-    copy_str(out->lw, sizeof out->lw, lw->valuestring);
-  else if (cJSON_IsNumber(lw))
-    snprintf(out->lw, sizeof out->lw, "%.17g", lw->valuedouble);
-  else
-    copy_str(out->lw, sizeof out->lw, "none");
 }
 typedef struct {
   const cJSON *item;

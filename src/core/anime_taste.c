@@ -42,6 +42,8 @@ static double mtime_ms(const cJSON *v) {
     memset(&tm, 0, sizeof tm);
     if (sscanf(v->valuestring, "%d-%d-%dT%d:%d:%d.%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min,
                &tm.tm_sec, &ms) >= 6) {
+      while (ms >= 1000) /* the fraction counts for milliseconds only: keep its first 3 digits */
+        ms /= 10;
       tm.tm_year -= 1900;
       tm.tm_mon -= 1;
       return (double)timegm(&tm) * 1000 + ms;

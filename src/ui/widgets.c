@@ -713,9 +713,6 @@ static int card_body(const Item *it, const CardPrep *cp, float x, float y, float
     }
   }
   gfx_clip_pop();
-  /* TEMPORARY v3.0.37 diagnostic: the raw stored lastWatched under a Continue Watching poster; remove with Item.lw */
-  if (it->cw && it->lw[0])
-    text_draw(it->lw, x + 4, y + h + 6, 20, 600, WHITE_A(255), 0, 0, ALIGN_LEFT);
   return shown;
 }
 int card_draw_wh(const Item *it, float x, float y, float w, float h, int wide, int label, int loadArt) {
