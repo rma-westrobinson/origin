@@ -496,8 +496,8 @@ static void apply_memory_settings(void) {
     int v = S[i].v[PF.tier];
     if (!strcmp(S[i].n, "connection_speed") && PF.cpus <= 2 && v > 15)
       v = 15; /* a slow CPU: fewer handshakes a second */
-    if (E->setting(S[i].n, v))
-      nb += snprintf(bad + nb, sizeof bad - nb > 0 ? sizeof bad - nb : 0, " %s", S[i].n);
+    if (E->setting(S[i].n, v) && nb < (int)sizeof bad)
+      nb += snprintf(bad + nb, sizeof bad - nb, " %s", S[i].n);
   }
   if (bad[0])
     fprintf(stderr, "[p2p] settings not taken:%s\n", bad);

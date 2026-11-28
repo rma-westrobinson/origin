@@ -47,7 +47,7 @@ static void now_iso(char *out, size_t cap) {
   gmtime_r(&t, &tm);
   strftime(out, cap, "%Y-%m-%dT%H:%M:%S.000Z", &tm);
 }
-static double tms(const cJSON *v) { /* _mtime as epoch ms or ISO text */
+double tms(const cJSON *v) { /* _mtime as epoch ms or ISO text */
   if (cJSON_IsNumber(v))
     return v->valuedouble;
   if (cJSON_IsString(v) && v->valuestring) {
@@ -1509,11 +1509,7 @@ static void item_from_lib(Item *out, const cJSON *l) {
   out->progress = d > 0 ? (float)(t / d) : 0;
   out->left = d > 0 ? (float)((d - t) / 60000.0) : 0;
 }
-typedef struct {
-  const cJSON *item;
-  double watched;
-} CwPick;
-static int cmp_cw(const void *a, const void *b) {
+int cmp_cw(const void *a, const void *b) {
   const CwPick *x = a, *y = b;
   if (x->watched < y->watched)
     return 1;

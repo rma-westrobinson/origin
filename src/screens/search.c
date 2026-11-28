@@ -688,6 +688,7 @@ static void live(void) {
   S.ncat = 0;
   memset(S.pg, 0, sizeof S.pg); /* a new query: pagination starts over */
   S.drawn = 1;
+  itemlist_clear(&S.top); /* the last query's IMDb titles must not sit ahead of the new results */
   if (!*p) {
     itemlist_clear(&S.items);
     S.nsug = 0;

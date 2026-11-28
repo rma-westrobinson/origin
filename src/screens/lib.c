@@ -25,7 +25,6 @@
 #define NF 6
 #define NB (NF + 1) /* the categories, then the sort */
 #define COLS 5
-#define MAXSHOW 200
 #define LW 300.0f /* the posters */
 #define LH 450.0f
 #define LSTEP 352.0f
@@ -218,7 +217,7 @@ static void render(void) {
     if (pass(&L.all[j], L.tab))
       tmp[m++] = j;
   qsort(tmp, m, sizeof *tmp, cmp);
-  L.n = m < MAXSHOW ? m : MAXSHOW;
+  L.n = m; /* every title: the index array is bounded by the library itself, and the grid draws only the visible rows */
   L.items = tmp;
   if (L.idx > L.n - 1)
     L.idx = L.n ? L.n - 1 : 0;

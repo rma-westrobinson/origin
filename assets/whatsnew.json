@@ -1,10 +1,10 @@
 {
-  "version": "3.0.39",
+  "version": "3.1.0",
   "items": [
     {
       "icon": "g_spark",
-      "title": "In-app updates fixed on mobile",
-      "text": "Updates now install through the system installer, so they work reliably on phones as well as TV. The About page also shows the version actually installed."
+      "title": "Audit fixes",
+      "text": "Phone pairing now uses a 6-digit code and locks out repeated wrong guesses. Closing the player early no longer wipes your resume position. Subtitle fallback now moves to the next stream when no subtitle works. My List is sorted correctly. Search no longer shows the last query's titles. Libraries past 200 titles are fully reachable."
     }
   ]
 }

@@ -435,30 +435,6 @@ static void board_cw_row(Board *b) {
    pages of Shows / Movies */
 /* Shows / Movies: Continue Watching of one kind (LIB_CW_SERIES or LIB_CW_MOVIES), every title in progress, no count
    limit (the library only; 0 requests); the anime tab, when on, takes its own out */
-static double mtime_ms(const cJSON *v) {
-  if (cJSON_IsNumber(v))
-    return v->valuedouble;
-  if (cJSON_IsString(v) && v->valuestring) {
-    struct tm tm;
-    int ms = 0;
-    memset(&tm, 0, sizeof tm);
-    if (sscanf(v->valuestring, "%d-%d-%dT%d:%d:%d.%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour, &tm.tm_min,
-               &tm.tm_sec, &ms) >= 6) {
-      tm.tm_year -= 1900;
-      tm.tm_mon -= 1;
-      return (double)timegm(&tm) * 1000 + ms;
-    }
-  }
-  return 0;
-}
-typedef struct {
-  const cJSON *it;
-  double at;
-} CwPick;
-static int cw_cmp(const void *a, const void *b) {
-  double x = ((const CwPick *)a)->at, y = ((const CwPick *)b)->at;
-  return x < y ? 1 : x > y ? -1 : 0;
-}
 static void board_cw_row_kind(Board *b, int kind) {
   int noAnime = kind != LIB_CW_ANIME && app_anime_on();
   ItemList cw;
@@ -674,17 +650,17 @@ static void my_list_row(Board *b, int series, int anime) {
       continue;
     if (anime && lib_item_is_anime(it))
       continue;
-    pk[n].it = it;
-    pk[n++].at = mtime_ms(cJSON_GetObjectItemCaseSensitive(it, "_mtime"));
+    pk[n].item = it;
+    pk[n++].watched = tms(cJSON_GetObjectItemCaseSensitive(it, "_mtime"));
   }
   if (n >= MYLIST_MIN) {
-    qsort(pk, (size_t)n, sizeof pk[0], cw_cmp);
+    qsort(pk, (size_t)n, sizeof pk[0], cmp_cw);
     if (n > MYLIST_MAX)
       n = MYLIST_MAX;
     ItemList l = { calloc((size_t)n, sizeof(Item)), 0, 0 };
     for (int i = 0; i < n && l.items; i++) {
       Item *o = &l.items[l.n++];
-      const cJSON *e = pk[i].it;
+      const cJSON *e = pk[i].item;
       snprintf(o->id, sizeof o->id, "%s", js_str(e, "_id", ""));
       snprintf(o->type, sizeof o->type, "%s", js_str(e, "type", "movie"));
       snprintf(o->name, sizeof o->name, "%s", js_str(e, "name", ""));

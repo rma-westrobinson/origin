@@ -100,6 +100,14 @@ const char *sb_bg_large(const Item *it, char *buf,
                         size_t cap); /* the largest there is: for a picture drawn nearly full screen */
 const char *sb_logo_of(const Item *it, char *buf, size_t cap);
 int sb_is_imdb(const char *id);
+/* Continue Watching / My List ordering, shared by the board: _mtime / lastWatched as epoch ms (ISO text normalised) and
+   the newest-first comparison (ties by _id) */
+typedef struct {
+  const cJSON *item;
+  double watched;
+} CwPick;
+double tms(const cJSON *v);
+int cmp_cw(const void *a, const void *b);
 void sb_meta_line(const cJSON *m, char *out, size_t cap);
 int sb_runtime_min(const char *s);
 void sb_fmt_runtime(int mn, char *out, size_t cap);

@@ -804,8 +804,9 @@ static Item lib_item(void) {
 }
 static void save_progress(int push) {
   double d = dur();
-  if (!P.id[0] || P.isTrailer || d <= 0 || getenv("SB_PLAY_NOSAVE"))
-    return; /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
+  if (!P.id[0] || P.isTrailer || d <= 0 || !P.live || !P.didResume || getenv("SB_PLAY_NOSAVE"))
+    return; /* (not live, or before the resume seek: the position is 0 and would wipe a good resume point) */
+  /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
   Item it = lib_item();
   lib_set_progress(P.id, &it, P.vid, video_time() * 1000, d * 1000, push);
   P.lastSave = now_();
@@ -5869,7 +5870,9 @@ static void sub_fallback(const char *why) {
   /* the lists may still be loading: wait, and do not leave the stream for a subtitle that may yet arrive */
   if (P.extLoading || P.adxLoading || (!P.embKnown && !P.embWaitOver))
     return;
-  if (P.canNext && subAdv < 2 && autoN < AUTO_NEXT_MAX) {
+  /* (P.canNext is only set by fail(): computed here from the playing stream) */
+  if (P.st.url[0] && strcmp(P.type, "other") && !P.isTrailer && subAdv < 2 && autoN < AUTO_NEXT_MAX) {
+    best_skip(P.st.url); /* this stream is not chosen again */
     subAdv++;
     autoN++;
     fprintf(stderr, "[subs] fallback (%s): no other subtitle, trying the next stream (%d/2)\n", why, subAdv);

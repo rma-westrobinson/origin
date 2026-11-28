@@ -1,4 +1,4 @@
-/* Cast receiver: a phone on the same network finds the TV (UDP 8766), pairs once with a 4-digit code shown here,
+/* Cast receiver: a phone on the same network finds the TV (UDP 8766), pairs once with a 6-digit code shown here,
    then drives it over a WebSocket (TCP 8765): play a stream, pause, resume, seek, stop, remote keys; it is told the
    state about once a second. Platform-neutral (webOS, Android TV): the app gives it hooks and calls cast_tick each
    frame. No threads: two non-blocking sockets polled per frame while idle.

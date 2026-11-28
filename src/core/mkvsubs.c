@@ -1381,6 +1381,8 @@ static int read_block(cu8 *b, long n, long o, int trackNum, Block *out) {
   long pe = end > bl + blN ? bl + blN : end;
   out->payload = b + bl + tl + 3;
   out->plen = pe - (bl + tl + 3);
+  if (out->plen < 0)
+    out->plen = 0; /* a block shorter than its own header */
   return 1;
 }
 
@@ -1522,6 +1524,11 @@ static void seen_add(MkvSession *s, long long k) {
     s->seen = realloc(s->seen, s->capseen * sizeof *s->seen);
   }
   s->seen[s->nseen++] = k;
+}
+static void rearm_scan(MkvSession *s) { /* scan mode comes back for a playhead that left the end of the file */
+  for (int k = 0; k < s->nts; k++)
+    if (s->ts[k].scan)
+      s->hasScan = 1;
 }
 static void prune(MkvSession *s) {
   s->prunedAt = mono();
@@ -2152,7 +2159,8 @@ static int probe(MkvSession *s) {
     unsigned id;
     long long sz;
     int il = read_id(b2, n2, 0, &id), sl = il ? read_size(b2, n2, il, &sz) : 0;
-    if (!il || id != ID_TRACKS || !sl || sz < 0) {
+    if (!il || id != ID_TRACKS || !sl || sz < 0 ||
+        sz > (16 << 20)) { /* (a Tracks element is KB; the cap keeps a bad size from a huge read) */
       free(b);
       free(b2);
       return -2;
@@ -2559,6 +2567,7 @@ void mkv_set_pos(MkvSession *s, double t, double buffered) {
   if (jumped) {
     s->jumpAt = mono();
     s->cur.on = 0;
+    rearm_scan(s); /* (the scan stops at the end of the file: a seek back must start it again) */
     if (s->state == MKV_HARVESTING)
       prune(s);
     pthread_cond_signal(&s->cv);
@@ -2651,7 +2660,12 @@ void mkv_style(MkvSession *s, int n,
     t->rser = NULL;
     t->rawOn = !!on;
     raw_fit(t);
-    s->nseen = 0;
+    s->nseen = 0; /* the dedupe set is rebuilt from the other tracks' lines, as prune does */
+    for (int k = 0; k < s->nts; k++)
+      for (int a = 0; a < s->ts[k].n; a++)
+        if (s->ts[k].skey[a])
+          seen_add(s, s->ts[k].skey[a]);
+    rearm_scan(s);
     s->nscanned = 0;
     s->cur.on = 0; /* (scanned Clusters: read again too) */
     pthread_cond_signal(&s->cv);

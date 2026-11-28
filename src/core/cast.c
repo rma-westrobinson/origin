@@ -35,7 +35,7 @@ typedef struct {
   char *out;
   int outN;
   int lastS;
-  double lastAt, heardAt, pingAt;
+  double lastAt, heardAt, pingAt, connAt;
   char *msg;
   int msgN, msgOp;
   unsigned trHash;
@@ -45,7 +45,10 @@ static int udp = -1, lis = -1, on;
 static Client C[MAXC];
 static char tvId[40], mac[24], code[8];
 static int codeFor = -1, wrong;
-static double codeAt, lockUntil;
+static double codeAt, lockUntil, wrongAt, codeReqAt = -1e9;
+#define CODE_DIGITS 6 /* the pairing code: 10^6 guesses, 3 tries a minute at most */
+#define CODE_REQ_GAP 5 /* s between two requests for a new code, from anyone */
+#define AUTH_DEADLINE 30 /* s from connecting to a token the TV knows (while a code is out for the phone: no limit) */
 
 static double mono(void) {
   struct timespec t;
@@ -224,7 +227,7 @@ static void put(Client *c, const void *b, int n) {
   c->outN += n;
   flush(c);
 }
-static void send_frame(Client *c, int op, const char *s, int n) {
+static int send_frame(Client *c, int op, const char *s, int n) { /* 1: queued, 0: dropped */
   unsigned char h[10];
   int hl = 2;
   h[0] = 0x80 | op;
@@ -236,11 +239,12 @@ static void send_frame(Client *c, int op, const char *s, int n) {
     h[3] = n & 255;
     hl = 4;
   } else
-    return;
+    return 0;
   if (c->outN + hl + n > OUTCAP)
-    return;
+    return 0;
   put(c, h, hl);
   put(c, s, n);
+  return 1;
 }
 static void send_close(Client *c, int code) {
   char b[2] = { (char)(code >> 8), (char)(code & 255) };
@@ -320,27 +324,38 @@ static void on_msg(Client *c, const char *s) {
     if (now < lockUntil)
       send_err(c, "locked");
     else if (!*cd) {
-      unsigned char b[2];
-      rnd(b, 2);
-      snprintf(code, sizeof code, "%04d", ((b[0] << 8) | b[1]) % 10000);
-      codeFor = (int)(c - C);
-      codeAt = now;
-      wrong = 0;
-      fprintf(stderr, "[cast] pairing asked%s%s\n", getenv("SB_CAST_DEBUG") ? ", code " : "",
-              getenv("SB_CAST_DEBUG") ? code : ""); /* (the code itself only in development) */
-      if (H.pairing)
-        H.pairing(code);
+      /* (a new code never resets the wrong-guess count; one at a time, at a gap; another phone's live code stays) */
+      if (codeFor >= 0 && codeFor != (int)(c - C))
+        send_err(c, "busy");
+      else if (now - codeReqAt < CODE_REQ_GAP)
+        send_err(c, "slow down");
+      else {
+        unsigned char b[4];
+        rnd(b, 4);
+        uint32_t r = (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
+        snprintf(code, sizeof code, "%0*u", CODE_DIGITS, r % 1000000u);
+        codeFor = (int)(c - C);
+        codeAt = codeReqAt = now;
+        fprintf(stderr, "[cast] pairing asked%s%s\n", getenv("SB_CAST_DEBUG") ? ", code " : "",
+                getenv("SB_CAST_DEBUG") ? code : ""); /* (the code itself only in development) */
+        if (H.pairing)
+          H.pairing(code);
+      }
     } else if (codeFor == (int)(c - C) && !strcmp(cd, code)) {
       char tok[33];
       token_new(tok);
       pairing_end();
       wrong = 0;
+      c->connAt = now; /* (its hello with the new token comes next) */
       cJSON *r = cJSON_CreateObject();
       cJSON_AddStringToObject(r, "t", "paired");
       cJSON_AddStringToObject(r, "token", tok);
       send_json(c, r);
       fprintf(stderr, "[cast] paired\n");
     } else {
+      if (now - wrongAt > 300)
+        wrong = 0; /* (old misses are forgotten) */
+      wrongAt = now;
       if (++wrong >= 3) {
         lockUntil = now + 60;
         pairing_end();
@@ -424,8 +439,8 @@ static void on_msg(Client *c, const char *s) {
       char *tr = H.tracks ? H.tracks() : NULL; /* asked: the tracks now, or empty lists when nothing plays */
       const char *empty = "{\"t\":\"tracks\",\"subs\":[],\"audio\":[],\"sub\":\"off\",\"aud\":\"\"}";
       const char *m = tr ? tr : empty;
-      send_frame(c, 1, m, (int)strlen(m));
-      c->trHash = tr ? fnv(tr) : 0;
+      int sent = send_frame(c, 1, m, (int)strlen(m));
+      c->trHash = tr && sent ? fnv(tr) : 0;
       free(tr);
     } else if (!strcmp(t, "subdelay")) {
       if (H.track) {
@@ -451,6 +466,21 @@ static int lan(const struct sockaddr_in *a) {
   uint32_t ip = ntohl(a->sin_addr.s_addr);
   return (ip >> 24) == 10 || (ip >> 20) == 0xAC1 || (ip >> 16) == 0xC0A8 || (ip >> 16) == 0xA9FE || (ip >> 24) == 127;
 }
+/* a browser page names itself in Origin: only a page from this network (an address like the TV's own) may open the
+   socket; a phone's own app sends none */
+static int origin_ok(const char *o) {
+  const char *h = strstr(o, "://");
+  if (!h)
+    return 0;
+  h += 3;
+  char host[64];
+  snprintf(host, sizeof host, "%.*s", (int)strcspn(h, "/:"), h);
+  if (!strcasecmp(host, "localhost"))
+    return 1;
+  struct sockaddr_in a;
+  memset(&a, 0, sizeof a);
+  return inet_pton(AF_INET, host, &a.sin_addr) == 1 && lan(&a);
+}
 static void handshake(Client *c) {
   c->in[c->inN] = 0;
   char *end = strstr(c->in, "\r\n\r\n");
@@ -459,8 +489,8 @@ static void handshake(Client *c) {
       drop(c);
     return;
   }
-  char key[128] = "", ver[16] = "";
-  int up = 0;
+  char key[128] = "", ver[16] = "", origin[128] = "";
+  int up = 0, hasOrigin = 0;
   for (char *l = c->in; l && l < end; l = strstr(l, "\r\n") ? strstr(l, "\r\n") + 2 : NULL) {
     if (!strncasecmp(l, "Sec-WebSocket-Key:", 18)) {
       const char *v = l + 18;
@@ -472,6 +502,12 @@ static void handshake(Client *c) {
       while (*v == ' ')
         v++;
       snprintf(ver, sizeof ver, "%.*s", (int)strcspn(v, "\r\n "), v);
+    } else if (!strncasecmp(l, "Origin:", 7)) {
+      const char *v = l + 7;
+      while (*v == ' ')
+        v++;
+      snprintf(origin, sizeof origin, "%.*s", (int)strcspn(v, "\r\n "), v);
+      hasOrigin = 1;
     } else if (!strncasecmp(l, "Upgrade:", 8)) {
       const char *v = l + 8;
       while (*v == ' ')
@@ -488,6 +524,12 @@ static void handshake(Client *c) {
   if (strcmp(ver, "13")) {
     const char *r =
         "HTTP/1.1 426 Upgrade Required\r\nSec-WebSocket-Version: 13\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    put(c, r, (int)strlen(r));
+    drop(c);
+    return;
+  }
+  if (hasOrigin && !origin_ok(origin)) {
+    const char *r = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     put(c, r, (int)strlen(r));
     drop(c);
     return;
@@ -624,10 +666,8 @@ static void tracks(double now) {
         break;
       h = fnv(s);
     }
-    if (c->trHash != h) {
-      c->trHash = h;
-      send_frame(c, 1, s, (int)strlen(s));
-    }
+    if (c->trHash != h && send_frame(c, 1, s, (int)strlen(s)))
+      c->trHash = h; /* (not marked told when the frame was dropped: it is sent again) */
   }
   free(s);
 }
@@ -692,7 +732,11 @@ int cast_start(const CastHooks *h) {
     } else
       nonblock(lis);
   }
-  on = udp >= 0 || lis >= 0;
+  if (lis < 0 && udp >= 0) {
+    close(udp); /* no control port: the TV must not announce itself as castable */
+    udp = -1;
+  }
+  on = lis >= 0;
   fprintf(stderr, "[cast] receiver: discovery %s, control %s, mac %s\n", udp >= 0 ? "on" : "off",
           lis >= 0 ? "on" : "off", mac[0] ? "known" : "unknown");
   return lis >= 0;
@@ -712,13 +756,28 @@ void cast_tick(void) {
       b[n] = 0;
       if (strncmp(b, "SBORIGIN?", 9) || !lan(&from))
         continue;
-      char r[400];
-      int rn = snprintf(
-          r, sizeof r,
-          "{\"id\":\"%s\",\"name\":\"%s\",\"plat\":\"%s\",\"ver\":\"%s\",\"port\":%d,\"mac\":\"%s\",\"paired\":%s}\n",
-          tvId, H.name ? H.name() : "TV", H.plat, H.ver, CAST_WS_PORT, mac,
-          H.get("castTokens", "")[0] ? "true" : "false");
-      sendto(udp, r, (size_t)rn, 0, (struct sockaddr *)&from, fl);
+      cJSON *d = cJSON_CreateObject(); /* (the name is escaped, the length is the real one) */
+      cJSON_AddStringToObject(d, "id", tvId);
+      cJSON_AddStringToObject(d, "name", H.name ? H.name() : "TV");
+      cJSON_AddStringToObject(d, "plat", H.plat);
+      cJSON_AddStringToObject(d, "ver", H.ver);
+      cJSON_AddNumberToObject(d, "port", CAST_WS_PORT);
+      cJSON_AddStringToObject(d, "mac", mac);
+      cJSON_AddBoolToObject(d, "paired", H.get("castTokens", "")[0] != 0);
+      char *r = cJSON_PrintUnformatted(d);
+      cJSON_Delete(d);
+      if (!r)
+        continue;
+      size_t rn = strlen(r);
+      char *rl = realloc(r, rn + 2);
+      if (!rl) {
+        free(r);
+        continue;
+      }
+      r = rl;
+      r[rn++] = '\n';
+      sendto(udp, r, rn, 0, (struct sockaddr *)&from, fl);
+      free(r);
     }
   if (lis >= 0)
     for (int k = 0; k < 2; k++) {
@@ -757,7 +816,8 @@ void cast_tick(void) {
       c->inN = c->outN = 0;
       c->lastS = -1;
       c->lastAt = 0;
-      c->heardAt = c->pingAt = mono();
+      c->trHash = 0;
+      c->heardAt = c->pingAt = c->connAt = mono();
       c->msgN = c->msgOp = 0;
     }
   for (int i = 0; i < MAXC; i++) {
@@ -791,6 +851,10 @@ void cast_tick(void) {
      * upgraded, after 10) */
     if (!c->ws && now - c->heardAt > 10) {
       drop(c);
+      continue;
+    }
+    if (!c->auth && now - c->connAt > AUTH_DEADLINE && codeFor != i) {
+      drop(c); /* silent sockets must not hold the four slots: a token, or a code in progress, within the deadline */
       continue;
     }
     if (c->ws && now - c->heardAt > 60) {

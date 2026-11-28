@@ -14,6 +14,7 @@ if [ $DEV = 1 ]; then ABIS="${ABIS:-arm64-v8a armeabi-v7a x86}"; else ABIS="${AB
 VER="${SB_VERSION:-$(cat "$ROOT/VERSION")}"   # SB_VERSION=x.y.z: another version (the updater test builds a newer one)
 APPID=io.github.betterstremio.origin; mkdir -p "$BA"; APPINFO="$BA/appinfo.json"
 sed "s/\"version\": \"0.0.0\"/\"version\": \"$VER\"/" "$ROOT/packaging/webos/appinfo.json" > "$APPINFO"
+grep -q "\"version\": \"$VER\"" "$APPINFO" && [ "$VER" != "0.0.0" ] || { echo "VERSION STAMP FAILED: $APPINFO is not $VER"; exit 1; }
 
 bash "$ROOT/tools/build.sh" android $ABIS $CLEAN
 
@@ -63,7 +64,8 @@ OUTS="$G/app/build/outputs/apk/release"; mkdir -p "$BA/apk"
 one() {   # the Gradle output, the suffix in its release name
   [ -f "$OUTS/$1" ] || { echo "APK FAILED: no $1"; exit 1; }
   local n="${APPID}_${VER}_$2.apk"; cp "$OUTS/$1" "$BA/apk/$n"
-  "$SDK/build-tools/35.0.0/apksigner" verify "$BA/apk/$n" && echo "signed ok"
+  "$SDK/build-tools/35.0.0/apksigner" verify "$BA/apk/$n" || { echo "SIGN FAILED"; exit 1; }
+  echo "signed ok"
   ls -l "$BA/apk/$n" | awk '{printf "%s  %.1f MB\n", $NF, $5/1048576}'; sha256sum "$BA/apk/$n" | cut -c1-64
 }
 if [ $DEV = 1 ]; then one app-release.apk android_dev
