@@ -784,7 +784,17 @@ void update_tick(float dt) {
   if (U.state == UPD_INSTALLING && !U.room) {
     char m[240];
     int st = plat_install_poll(m, sizeof m);
-    if (st < 0) {
+    static int handedOff; /* the installer's confirm screen was shown (state 1) in this install */
+    if (st == 1 && m[0])
+      handedOff = 1;
+    if (st == 0 && !m[0] && handedOff) { /* back from the installer without the version changing: offer it again, quietly */
+      handedOff = 0;
+      U.state = UPD_AVAIL;
+      U.msg[0] = 0;
+      fprintf(stderr, "[update] back from the installer, not installed: offered again\n");
+      changed();
+    } else if (st < 0) {
+      handedOff = 0;
       U.state = UPD_AVAIL;
       snprintf(U.msg, sizeof U.msg, "%s", T1("The update failed: {e}", "e", m));
       fprintf(stderr, "[update] install failed: %s\n", m);

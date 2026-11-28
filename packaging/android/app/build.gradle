@@ -55,6 +55,7 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer-dash:$m3"
     implementation "androidx.media3:media3-exoplayer-rtsp:$m3"   // security cameras: rtsp:// (SbPlayer.load)
     implementation "androidx.media3:media3-ui:$m3"
+    implementation 'androidx.core:core:1.13.1'   // FileProvider (SbUpdater: the update APK goes to the system installer)
     implementation 'androidx.annotation:annotation:1.9.1'
     implementation 'androidx.annotation:annotation-experimental:1.4.1'
 }

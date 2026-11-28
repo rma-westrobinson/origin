@@ -535,6 +535,11 @@ static int about_opts(void) {
   const char *av = update_avail();
   int st = update_state();
   aboutSeen = update_serial();
+  if (update_current()[0]) { /* the running version (appinfo.json), read when the start's update check began; display only */
+    Setting *s = &supS[n++];
+    set_act(s, "__ver", T1("Installed version {v}", "v", update_current()), "");
+    s->raw = 1;
+  }
   if (av) {
     Setting *s = &supS[n++];
 #if SB_UPDATE_IN_BROWSER
@@ -544,7 +549,7 @@ static int about_opts(void) {
     set_act(s, "__upd", T1("Version {v} is available", "v", av), T("Install the update with Apps2Samsung"));
 #else
     set_act(s, "__upd",
-            st == UPD_INSTALLING ? T1("Installing version {v}…", "v", av) : T1("Install version {v}", "v", av),
+            st == UPD_INSTALLING ? T1("Updating to version {v}…", "v", av) : T1("Update to version {v}", "v", av),
             update_msg()[0] ? update_msg() : T("Downloads, checks and installs it; the app opens again by itself"));
 #endif
     s->raw = 1;

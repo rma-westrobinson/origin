@@ -1,18 +1,14 @@
 package tv.stremioorigin.app;
 
 import android.app.Activity;
-import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.util.Log;
+
+import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -24,20 +20,23 @@ import java.net.URL;
 import java.security.MessageDigest;
 
 /* The in-app update (src/core/update.c on Android): the release's APK is downloaded to the cache, its SHA-256
-   checked against the one GitHub lists, and handed to the system's installer through a PackageInstaller
-   session. The first time, Android asks the user to allow installs from this app: the install goes on by
-   itself when they come back (onResume). The C side polls the state as "<0|1|->|<message>". */
+   checked against the one GitHub lists, and handed to the system's own installer with an ACTION_VIEW intent on a
+   FileProvider content:// URI. The installer then owns the whole confirmation (Play Protect, Install/Cancel) as its own
+   foreground screen; the app never installs silently. There is no result callback: success shows only when the app
+   starts again with the new version. If the user comes back without it (onResume, same version still running), the
+   state goes back to "0|" with no message and update.c offers the update again, with no failure shown. The first time,
+   Android asks the user to allow installs from this app: the install goes on by itself when they come back (onResume).
+   The C side polls the state as "<0|1|->|<message>". */
 public final class SbUpdater {
     static final String TAG = "StremioOrigin";
-    static final String ACTION = "tv.stremioorigin.app.INSTALL_STATUS";
     static volatile String state = "0|";
     static volatile boolean busy;
     static File ready;                 // a checked APK waiting for the permission
+    static String readyVersion;
     static boolean waitingPermission;
-    static BroadcastReceiver receiver;
-    static volatile String otherPkg;   // the APK's package when it is not ours (the 2.1.12 bridge): opened once installed
+    static volatile String handedOff;  // the version whose installer screen was shown; null when nothing is out there
 
-    public static String poll() { return state; }
+public static String poll() { return state; }
 
     public static boolean start(String url, String sha, String version) {
         if (busy) return true;
@@ -50,7 +49,7 @@ public final class SbUpdater {
                 String got = sha256(f);
                 if (!got.equalsIgnoreCase(sha)) { f.delete(); fail("the download is damaged (checksum " + got.substring(0, 12) + "… instead of " + sha.substring(0, Math.min(12, sha.length())) + "…)"); return; }
                 Log.i(TAG, "update: " + f.length() + " bytes, checksum ok");
-                a.runOnUiThread(() -> install(a, f));
+                a.runOnUiThread(() -> install(a, f, version));
             } catch (Exception e) { Log.w(TAG, "update download", e); fail(e.getMessage() != null ? e.getMessage() : e.toString()); }
         }, "sb-update").start();
         return true;
@@ -81,9 +80,9 @@ public final class SbUpdater {
         StringBuilder s = new StringBuilder(); for (byte x : md.digest()) s.append(String.format("%02x", x)); return s.toString();
     }
 
-    static void install(Activity a, File f) {
+    static void install(Activity a, File f, String version) {
         if (Build.VERSION.SDK_INT >= 26 && !a.getPackageManager().canRequestPackageInstalls()) {
-            ready = f; waitingPermission = true; state = "1|Allow installs from " + a.getString(R.string.app_name) + ", then come back";
+            ready = f; readyVersion = version; waitingPermission = true; state = "1|Allow installs from " + a.getString(R.string.app_name) + ", then come back";
             try { a.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.getPackageName()))); }
             catch (Exception e) {
                 Log.w(TAG, "update: no install-permission screen", e);
@@ -93,107 +92,37 @@ public final class SbUpdater {
             }
             return;
         }
-        int id = -1;
-        PackageInstaller pi = null;
         try {
-            pi = a.getPackageManager().getPackageInstaller();
-            // sessions an earlier try left behind (a dialog dismissed, a failure): let them go, they only hold space
-            try { for (PackageInstaller.SessionInfo si : pi.getMySessions()) pi.abandonSession(si.getSessionId()); }
-            catch (Exception e) { Log.w(TAG, "update: old sessions", e); }
-            PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            // the APK's own package: the new-id app (src/core/update.c) is installed beside this one, not over it
-            PackageInfo ai = a.getPackageManager().getPackageArchiveInfo(f.getAbsolutePath(), 0);
-            String pkg = ai != null && ai.packageName != null ? ai.packageName : a.getPackageName();
-            otherPkg = pkg.equals(a.getPackageName()) ? null : pkg;
-            if (otherPkg != null) Log.i(TAG, "update: installing " + pkg + " beside this app");
-            p.setAppPackageName(pkg); p.setSize(f.length());
-            // The system always asks the user to confirm the update (the default). A silent update (USER_ACTION_NOT_REQUIRED)
-            // is only for the app that installed this one, and a sideloaded copy is not that: it is a second way to fail.
-            sigNote = sigNote(a, f, pkg);
-            if (!sigNote.isEmpty()) Log.w(TAG, "update:" + sigNote);
-            id = pi.createSession(p);
-            try (PackageInstaller.Session s = pi.openSession(id)) {
-                try (InputStream in = new FileInputStream(f); OutputStream o = s.openWrite("base.apk", 0, f.length())) {
-                    byte[] b = new byte[65536]; int r; while ((r = in.read(b)) > 0) o.write(b, 0, r); s.fsync(o); }
-                register(a);
-                Intent i = new Intent(ACTION).setPackage(a.getPackageName());
-                PendingIntent pend = PendingIntent.getBroadcast(a, id, i, PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0));
-                s.commit(pend.getIntentSender());
-            }
-            state = "1|Installing…";
+            // The system always asks the user to confirm: no silent update.
+            Uri uri = FileProvider.getUriForFile(a, a.getPackageName() + ".fileprovider", f);
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            handedOff = version;
+            a.startActivity(i);
+            state = "1|Confirm the install on screen";   // busy stays true until the user comes back (onResume) or the app restarts
         } catch (Exception e) {
             Log.w(TAG, "update install", e);
-            if (pi != null && id >= 0) { try { pi.abandonSession(id); } catch (Exception ignored) {} }
+            handedOff = null;
             fail("could not start the installer (" + e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "") + ")");
         }
     }
-    static volatile String sigNote = "";
-    /* "" unless the new APK is signed with a different key from the installed app (Android then refuses the update and
-       only an uninstall, which wipes the app's data, gets round it): then the words that say so */
-    static String sigNote(Context c, File f, String pkg) {
-        if (Build.VERSION.SDK_INT < 28) return "";
-        try {
-            PackageManager pm = c.getPackageManager();
-            PackageInfo n = pm.getPackageArchiveInfo(f.getAbsolutePath(), PackageManager.GET_SIGNING_CERTIFICATES);
-            PackageInfo o = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES);
-            if (n == null || o == null || n.signingInfo == null || o.signingInfo == null) return "";
-            android.content.pm.Signature[] x = n.signingInfo.getApkContentsSigners(), y = o.signingInfo.getApkContentsSigners();
-            if (x == null || y == null || x.length == 0 || y.length == 0) return "";
-            return java.util.Arrays.equals(x, y) ? "" : " - the new build is signed with a different key from the one installed";
-        } catch (Exception e) { return ""; }
-    }
-    /* the installer's answer in words (its own message is often only a code) */
-    static String why(int st, String msg) {
-        String h;
-        switch (st) {
-            case PackageInstaller.STATUS_FAILURE_BLOCKED: h = "the device blocked the install"; break;
-            case PackageInstaller.STATUS_FAILURE_CONFLICT: h = "it conflicts with the installed app"; break;
-            case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE: h = "it does not fit this device"; break;
-            case PackageInstaller.STATUS_FAILURE_INVALID: h = "the file is not a valid app"; break;
-            case PackageInstaller.STATUS_FAILURE_STORAGE: h = "not enough storage"; break;
-            default: h = "the installer said no"; break;
-        }
-        return h + " (" + st + (msg != null && !msg.isEmpty() ? ": " + msg : "") + ")" + sigNote;
-    }
-    static void register(Context c) {
-        if (receiver != null) return;
-        receiver = new BroadcastReceiver() { @Override public void onReceive(Context cx, Intent in) {
-            int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
-            String msg = in.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
-            Log.i(TAG, "update: installer status " + st + " " + msg);
-            if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                Intent confirm = in.getParcelableExtra(Intent.EXTRA_INTENT);
-                if (confirm == null) { fail("the installer sent nothing to confirm"); return; }
-                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                try { cx.startActivity(confirm); }
-                catch (Exception e) { Log.w(TAG, "update: confirm screen", e); fail("could not open the installer's confirm screen (" + e.getClass().getSimpleName() + ")"); return; }
-                state = "1|Confirm the update on screen";
-            } else if (st == PackageInstaller.STATUS_SUCCESS) {
-                state = "1|Installed: open the app again"; busy = false;
-                if (otherPkg != null) openOther(cx, otherPkg);
-            }
-            else if (st == PackageInstaller.STATUS_FAILURE_ABORTED) fail("cancelled");
-            else fail(why(st, msg));
-        } };
-        IntentFilter flt = new IntentFilter(ACTION);
-        Context app = c.getApplicationContext();   // (not the activity: the answer must find the receiver whatever the activity is doing)
-        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, flt, Context.RECEIVER_NOT_EXPORTED); else app.registerReceiver(receiver, flt);
-    }
-    // the new-id app, on a TV (leanback launcher) or a phone; if the system will not start it from here, its own icon is there
-    static void openOther(Context cx, String pkg) {
-        try {
-            PackageManager pm = cx.getPackageManager();
-            Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);
-            if (i == null) i = pm.getLaunchIntentForPackage(pkg);
-            if (i == null) { Log.w(TAG, "update: no launch intent for " + pkg); return; }
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            cx.startActivity(i);
-            state = "1|Installed: the new app opens";
-        } catch (Exception e) { Log.w(TAG, "update: could not open " + pkg, e); }
+    /* the version of the installed package, "" when it cannot be read */
+    static String installedVersion(Activity a) {
+        try { String v = a.getPackageManager().getPackageInfo(a.getPackageName(), 0).versionName; return v != null ? v : ""; }
+        catch (Exception e) { return ""; }
     }
     static void onResume(Activity a) {
+        if (handedOff != null && !waitingPermission) {
+            // back from the system installer: a genuine update restarts the process, so still being here with the
+            // old version means it was not installed (cancelled, dismissed, blocked). Offer it again, quietly.
+            if (!handedOff.equals(installedVersion(a))) {
+                Log.i(TAG, "update: back from the installer, " + handedOff + " not installed");
+                handedOff = null; state = "0|"; busy = false;
+            }
+            return;
+        }
         if (!waitingPermission || ready == null) return;
         if (Build.VERSION.SDK_INT >= 26 && !a.getPackageManager().canRequestPackageInstalls()) { fail("installs from this app are not allowed"); waitingPermission = false; return; }
-        waitingPermission = false; File f = ready; ready = null; install(a, f);
+        waitingPermission = false; File f = ready; String v = readyVersion; ready = null; install(a, f, v);
     }
 }

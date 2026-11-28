@@ -1,10 +1,10 @@
 {
-  "version": "3.0.38",
+  "version": "3.0.39",
   "items": [
     {
       "icon": "g_spark",
-      "title": "Continue Watching order fix",
-      "text": "Continue Watching now lists the most recently watched title first. Timestamps with more than 3 fractional digits were being read as milliseconds, which scrambled the order."
+      "title": "In-app updates fixed on mobile",
+      "text": "Updates now install through the system installer, so they work reliably on phones as well as TV. The About page also shows the version actually installed."
     }
   ]
 }
